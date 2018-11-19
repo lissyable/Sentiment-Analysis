@@ -1,0 +1,202 @@
+---
+title: "Sentiment Analysis"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+# Sentiment analysis
+
+```{r}
+get_sentiments("bing")
+get_sentiments("afinn")
+get_sentiments("nrc")
+
+```
+
+
+```{r}
+
+```
+
+# RBC
+
+
+# NRC
+
+```{r}
+RBC_Nrc_sent <- get_nrc_sentiment(RBC_text)
+RBC_tidy <- tidy(RBC_corpus)
+RBC_word <- RBC_tidy  %>% unnest_tokens(word, text)
+RBC_Nrc <- RBC_word %>% inner_join(get_sentiments("nrc"), by="word")
+
+RBC_Nrc %>% count(sentiment) %>%
+        ggplot(aes(x=sentiment, y=n, fill=sentiment)) +
+        geom_bar(stat="identity") + coord_polar() +
+        theme(legend.position = "none", axis.text.x = element_blank()) +
+        geom_text(aes(label=sentiment, y=2500)) +
+        labs(x="", y="", title="RBC")
+```
+
+# Comparison cloud
+
+```{r}
+RBC_word %>%
+    inner_join(get_sentiments("nrc"), by = "word") %>%
+    count(word, sentiment, sort = TRUE) %>%
+    acast(word ~ sentiment, value.var = "n", fill = 0) %>% 
+    comparison.cloud(colors = c("#00B2FF", "red", "#FF0099", "#6600CC", "green", "orange", "blue", "brown", "black", "darkblue"), max.words = 100, scale = c(2, 0.4))
+```
+
+
+
+# Most used words
+
+
+```{r}
+
+RBC_Nrc_posneg <- RBC_Nrc %>% filter(sentiment %in% c("positive", "negative"))
+
+RBC_Nrc_posneg_count <- RBC_Nrc_posneg %>% count(sentiment)
+
+RBC_Nrc_posneg %>% count(word, sentiment, sort=TRUE) %>%
+        group_by(sentiment) %>% arrange(desc(n)) %>% slice(1:20) %>%
+        ggplot(aes(x=reorder(word, n), y=n)) +
+        geom_col(aes(fill=sentiment), show.legend=FALSE) +
+        coord_flip() +
+        facet_wrap(~sentiment, scales="free_y") +
+        labs(x="", y="number of times used", title="RBC's most used words") +
+        scale_fill_manual(values = c("positive"="green", "negative"="red"))
+
+
+```
+
+
+# Comparison cloud RBC
+
+```{r}
+
+
+RBC_Nrc_posneg %>%
+    count(word, sentiment, sort = TRUE) %>%
+    acast(word ~ sentiment, value.var = "n", fill = 0) %>% 
+    comparison.cloud(colors = c("blue", "green"), max.words = 200, scale = c(2, 0.5))
+
+```
+
+# BING
+
+```{r}
+RBC_tidy <- tidy(RBC_corpus)
+RBC_word <- RBC_tidy  %>% unnest_tokens(word, text)
+RBC_Bing <- RBC_word %>% inner_join(get_sentiments("bing"), by="word")
+
+RBC_Bing_count <- RBC_Bing %>% count(sentiment)
+
+RBC_Bing %>% count(word, sentiment, sort=TRUE) %>%
+        group_by(sentiment) %>% arrange(desc(n)) %>% slice(1:20) %>%
+        ggplot(aes(x=reorder(word, n), y=n)) +
+        geom_col(aes(fill=sentiment), show.legend=FALSE) +
+        coord_flip() +
+        facet_wrap(~sentiment, scales="free_y") +
+        labs(x="", y="number of times used", title="RBC's most used words") +
+        scale_fill_manual(values = c("positive"="green", "negative"="red"))
+```
+
+# comparison cloud for bing
+
+```{r}
+
+
+RBC_Bing %>%
+    count(word, sentiment, sort = TRUE) %>%
+    acast(word ~ sentiment, value.var = "n", fill = 0) %>% 
+    comparison.cloud(colors = c("blue", "green"), max.words = 200, scale = c(2, 0.5))
+
+
+```
+
+# AFINN
+
+```{r}
+RBC_Afinn <- RBC_word %>% inner_join(get_sentiments("afinn"), by="word")
+RBC_Afinn$sentiment <- ifelse(RBC_Afinn$score < 0, "negative", ifelse(RBC_Afinn$score > 0, "positive", "Neutral"))
+RBC_Afinn_count <- RBC_Afinn %>% count(sentiment)
+
+RBC_Afinn %>% count(word, sentiment, sort=TRUE) %>%
+        group_by(sentiment) %>% arrange(desc(n)) %>% slice(1:20) %>%
+        ggplot(aes(x=reorder(word, n), y=n)) +
+        geom_col(aes(fill=sentiment), show.legend=FALSE) +
+        coord_flip() +
+        facet_wrap(~sentiment, scales="free_y") +
+        labs(x="", y="number of times used", title="RBC's most used words") +
+        scale_fill_manual(values = c("positive"="green", "negative"="red"))
+
+```
+
+# Comparison cloud 
+
+```{r}
+RBC_Afinn %>%
+    count(word, sentiment, sort = TRUE) %>%
+    acast(word ~ sentiment, value.var = "n", fill = 0) %>% 
+    comparison.cloud(colors = c("blue", "green"), max.words = 200, scale = c(2, 0.5))
+
+
+```
+
+# Compare three lexicons
+
+```{r}
+RBC <- RBC_tidy %>% 
+    mutate(linenumber = row_number(), ignore_case = TRUE) %>%
+    ungroup() %>%
+    unnest_tokens(word, text)
+
+afinn <- RBC %>%
+    inner_join(get_sentiments("afinn"), by="word") %>%
+    group_by(index = linenumber %/% 30) %>%
+    summarise(sentiment = sum(score)) %>%
+    mutate(method = "AFINN")
+
+
+bing <- RBC %>%
+    inner_join(get_sentiments("bing"), by="word") %>%
+    group_by(index = linenumber %/% 30) %>%
+    count(sentiment) %>%
+    spread(sentiment, n, fill = 0) %>%
+    mutate(method = "BING", sentiment = positive - negative)
+
+nrc <- RBC %>%
+    inner_join(get_sentiments("nrc"), by="word") %>%
+    filter(sentiment %in% c("positive", "negative")) %>%
+    group_by(index = linenumber %/% 30) %>%
+    count(sentiment) %>%
+    spread(sentiment, n, fill = 0) %>%
+    mutate(method = "NRC", sentiment = positive - negative)
+
+cols_idx = c("index", "sentiment", "method")
+sentiment_evaluations <- bind_rows(afinn[,cols_idx], bing[,cols_idx], nrc[,cols_idx])
+
+ggplot(data = sentiment_evaluations, mapping = aes(x = index, y = sentiment, fill = method)) +
+    geom_bar(alpha = 0.7, stat = "identity", show.legend = F) +
+    facet_wrap(facets = ~ method, ncol = 1, scales = "free_y")
+  
+```
+
+
+```{r}
+
+```
+
+
