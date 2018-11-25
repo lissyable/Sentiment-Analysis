@@ -1,0 +1,530 @@
+---
+title: "Wordcloud comparison"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+```{r}
+setup_twitter_oauth(consumer_key, consumer_secret, access_token, access_token_secret)
+```
+
+```{r}
+
+```
+
+
+
+```{r}
+RBC_tweets <- read.csv(file.choose(), header = TRUE)
+TD_tweets <- read.csv(file.choose(), header = TRUE)
+CIBC_tweets <- read.csv(file.choose(), header = TRUE)
+BMO_tweets <- read.csv(file.choose(), header = TRUE)
+SCOTIA_tweets <- read.csv(file.choose(), header = TRUE)
+```
+
+# RBC
+
+```{r}
+RBC_tweet <- RBC_tweets[1:3000, ]
+RBC_tweet_check <- RBC_tweets[3001:3379, ]
+RBC_tweet <- as.data.frame(RBC_tweet)
+RBC_text <- RBC_tweet$RBC_tweet
+
+RBC_text <- iconv(RBC_text, to = 'UTF-8')
+head(RBC_text)
+class(RBC_tweet)
+```
+
+
+```{r}
+RBC_text <- str_replace_all(RBC_text, "[\\.\\,\\;]+", "")
+RBC_text <- str_replace_all(RBC_text, "http\\w+", "")
+RBC_text <- str_replace_all(RBC_text, "@\\w+", "")
+RBC_text <- str_replace_all(RBC_text, "[[:punct:]]", "")
+RBC_text <- str_replace_all(RBC_text, "[[:digit:]]", "")
+RBC_text <- str_replace_all(RBC_text, "^ ", "")
+RBC_text <- str_replace_all(RBC_text, "[<].*[>]", "")
+RBC_text <- str_replace_all(RBC_text, "[\n]", "")
+RBC_text <- str_replace_all(RBC_text, "[ |\t]{2,}", "")
+RBC_text = str_replace_all(RBC_text, "^\\s+|\\s+$", "")
+RBC_text = str_replace_all(RBC_text, "&amp", "")
+RBC_text = str_replace_all(RBC_text, "(RT|via)((?:\\b\\W*@\\w+)+)", "")
+RBC_text <- iconv(RBC_text, "UTF-8", "ASCII", sub="")
+head(RBC_text)
+```
+
+
+```{r}
+RBC_corpus <- VCorpus(VectorSource(RBC_text))
+RBC_corpus <- tm_map(RBC_corpus, removePunctuation)
+RBC_corpus <- tm_map(RBC_corpus, removeNumbers)
+RBC_corpus <- tm_map(RBC_corpus, stripWhitespace)
+RBC_corpus <- tm_map(RBC_corpus, removeWords, stopwords("english"))
+RBC_corpus <- tm_map(RBC_corpus, content_transformer(stri_trans_tolower))
+
+removeURL <- function(x) gsub("http://[[:alnum:]]*", "", x)
+  RBC_corpus <- tm_map(RBC_corpus, removeURL) 
+  
+    twtrStopWords <- c(stopwords("english"),'rt','http','https', "rbc", "royal bank of canada", "bank", "canada", "royal")
+  RBC_corpus <- tm_map(RBC_corpus, removeWords, twtrStopWords)
+
+    RBC_corpus <- tm_map(RBC_corpus, PlainTextDocument)
+    
+
+```
+
+
+
+```{r}
+RBC_tdm <- TermDocumentMatrix(RBC_corpus)
+RBC_tdm <- as.matrix(RBC_tdm)
+RBC_tdm[1:5, 1:5]
+RBC_words <- rowSums(RBC_tdm)
+RBC_words <- sort(rowSums(RBC_tdm), decreasing = TRUE)
+set.seed(400)
+RBC_DF <- data.frame(word=names(RBC_words), count=RBC_words)
+
+
+```
+
+# Wordcloud for RBC
+
+```{r}
+wordcloud(RBC_DF$word, RBC_DF$count, max.words = 100, scale=c(2.5,.5), random.color = TRUE, colors=brewer.pal(9,"Set1"))
+```
+
+
+# Most used words in RBC
+
+```{r}
+
+
+RBC_DF[1:50,] %>%
+        ggplot(aes(x=(reorder(word, count)), y=count, fill=word)) +
+        geom_bar(stat='identity') + coord_flip() + theme(legend.position = "none") +
+        labs(x="")
+```
+
+# outperform, thanks, good, great, rating, well, like 
+
+
+
+# TD
+
+
+
+```{r}
+
+TD_tweet <- TD_tweets$text
+TD_text_check <- TD_tweet[4001:5000]
+TD_text <- TD_tweet[1:4000]
+
+TD_text <- iconv(TD_text, to = 'UTF-8')
+head(TD_text)
+
+```
+
+
+```{r}
+TD_text <- str_replace_all(TD_text, "[\\.\\,\\;]+", "")
+TD_text <- str_replace_all(TD_text, "http\\w+", "")
+TD_text <- str_replace_all(TD_text, "@\\w+", "")
+TD_text <- str_replace_all(TD_text, "[[:punct:]]", "")
+TD_text <- str_replace_all(TD_text, "[[:digit:]]", "")
+TD_text <- str_replace_all(TD_text, "^ ", "")
+TD_text <- str_replace_all(TD_text, "[<].*[>]", "")
+TD_text <- str_replace_all(TD_text, "[\n]", "")
+TD_text <- str_replace_all(TD_text, "[ |\t]{2,}", "")
+TD_text = str_replace_all(TD_text, "^\\s+|\\s+$", "")
+TD_text = str_replace_all(TD_text, "&amp", "")
+TD_text = str_replace_all(TD_text, "(RT|via)((?:\\b\\W*@\\w+)+)", "")
+TD_text <- iconv(TD_text, "UTF-8", "ASCII", sub="")
+head(TD_text)
+
+```
+
+
+```{r}
+TD_corpus <- VCorpus(VectorSource(TD_text))
+TD_corpus <- tm_map(TD_corpus, removePunctuation)
+TD_corpus <- tm_map(TD_corpus, removeNumbers)
+TD_corpus <- tm_map(TD_corpus, stripWhitespace)
+TD_corpus <- tm_map(TD_corpus, removeWords, stopwords("english"))
+TD_corpus <- tm_map(TD_corpus, content_transformer(stri_trans_tolower))
+
+removeURL <- function(x) gsub("http://[[:alnum:]]*", "", x)
+  TD_corpus <- tm_map(TD_corpus, removeURL) 
+  
+    twtrStopWords <- c(stopwords("english"),'rt','http','https', "td", "bank", "toronto dominion")
+  TD_corpus <- tm_map(TD_corpus, removeWords, twtrStopWords)
+
+    TD_corpus <- tm_map(TD_corpus, PlainTextDocument)
+
+```
+
+
+```{r}
+TD_tdm <- TermDocumentMatrix(TD_corpus)
+TD_tdm <- as.matrix(TD_tdm)
+TD_tdm[1:5, 1:5]
+TD_words <- rowSums(TD_tdm)
+TD_words <- sort(rowSums(TD_tdm), decreasing = TRUE)
+set.seed(400)
+TD_DF <- data.frame(word=names(TD_words), count=TD_words)
+
+    
+
+```
+
+# Wordcloud for TD
+
+```{r}
+ wordcloud(TD_DF$word, TD_DF$count, max.words = 100, scale=c(2.5,.5), random.color = TRUE, colors=brewer.pal(9,"Set1"))
+```
+
+# Most used words in TD
+
+```{r}
+ TD_DF[1:50,] %>%
+        ggplot(aes(x=(reorder(word, count)), y=count, fill=word)) +
+        geom_bar(stat='identity') + coord_flip() + theme(legend.position = "none") +
+        labs(x="")
+```
+
+# like, good, great, thank, best
+
+
+
+# SCOTIA
+
+```{r}
+
+
+SCOTIA_tweet <- SCOTIA_tweets$text
+SCOTIA_text_check <- SCOTIA_tweet[4001:5000]
+SCOTIA_text <- SCOTIA_tweet[1:4000]
+
+SCOTIA_text <- iconv(SCOTIA_text, to = 'UTF-8')
+head(SCOTIA_text)
+
+```
+
+
+```{r}
+SCOTIA_text <- str_replace_all(SCOTIA_text, "[\\.\\,\\;]+", "")
+SCOTIA_text <- str_replace_all(SCOTIA_text, "http\\w+", "")
+SCOTIA_text <- str_replace_all(SCOTIA_text, "@\\w+", "")
+SCOTIA_text <- str_replace_all(SCOTIA_text, "[[:punct:]]", "")
+SCOTIA_text <- str_replace_all(SCOTIA_text, "[[:digit:]]", "")
+SCOTIA_text <- str_replace_all(SCOTIA_text, "^ ", "")
+SCOTIA_text <- str_replace_all(SCOTIA_text, "[<].*[>]", "")
+SCOTIA_text <- str_replace_all(SCOTIA_text, "[\n]", "")
+SCOTIA_text <- str_replace_all(SCOTIA_text, "[ |\t]{2,}", "")
+SCOTIA_text = str_replace_all(SCOTIA_text, "^\\s+|\\s+$", "")
+SCOTIA_text = str_replace_all(SCOTIA_text, "&amp", "")
+SCOTIA_text = str_replace_all(SCOTIA_text, "(RT|via)((?:\\b\\W*@\\w+)+)", "")
+SCOTIA_text <- iconv(SCOTIA_text, "UTF-8", "ASCII", sub="")
+head(SCOTIA_text)
+
+```
+
+
+```{r}
+SCOTIA_corpus <- VCorpus(VectorSource(SCOTIA_text))
+SCOTIA_corpus <- tm_map(SCOTIA_corpus, removePunctuation)
+SCOTIA_corpus <- tm_map(SCOTIA_corpus, removeNumbers)
+SCOTIA_corpus <- tm_map(SCOTIA_corpus, stripWhitespace)
+SCOTIA_corpus <- tm_map(SCOTIA_corpus, removeWords, stopwords("english"))
+SCOTIA_corpus <- tm_map(SCOTIA_corpus, content_transformer(stri_trans_tolower))
+
+removeURL <- function(x) gsub("http://[[:alnum:]]*", "", x)
+  SCOTIA_corpus <- tm_map(SCOTIA_corpus, removeURL) 
+  
+    twtrStopWords <- c(stopwords("english"),'rt','http','https', "scotia", "bank", "nova", "canada", "novascotia")
+  SCOTIA_corpus <- tm_map(SCOTIA_corpus, removeWords, twtrStopWords)
+
+    SCOTIA_corpus <- tm_map(SCOTIA_corpus, PlainTextDocument)
+
+```
+
+
+```{r}
+SCOTIA_tdm <- TermDocumentMatrix(SCOTIA_corpus)
+SCOTIA_tdm <- as.matrix(SCOTIA_tdm)
+SCOTIA_tdm[1:5, 1:5]
+SCOTIA_words <- rowSums(SCOTIA_tdm)
+SCOTIA_words <- sort(rowSums(SCOTIA_tdm), decreasing = TRUE)
+set.seed(400)
+SCOTIA_DF <- data.frame(word=names(SCOTIA_words), count=SCOTIA_words)
+
+
+```
+
+
+# Wordcloud for SCOTIA
+
+```{r}
+ wordcloud(SCOTIA_DF$word, SCOTIA_DF$count, max.words = 100, scale=c(2.5,.5), random.color = TRUE, colors=brewer.pal(9,"Set1")) 
+```
+
+
+# Most used words in SCOTIA
+
+```{r}
+SCOTIA_DF[1:50,] %>%
+        ggplot(aes(x=(reorder(word, count)), y=count, fill=word)) +
+        geom_bar(stat='identity') + coord_flip() + theme(legend.position = "none") +
+        labs(x="")
+```
+
+# denied, good, care, criminal, arrested, love, great
+
+
+
+# BMO
+
+```{r}
+
+
+BMO_tweet <- BMO_tweets$text
+BMO_text_check <- BMO_tweet[3001:3849]
+BMO_text <- BMO_tweet[1:3000]
+
+BMO_text <- iconv(BMO_text, to = 'UTF-8')
+head(BMO_text)
+
+```
+
+
+```{r}
+BMO_text <- str_replace_all(BMO_text, "[\\.\\,\\;]+", "")
+BMO_text <- str_replace_all(BMO_text, "http\\w+", "")
+BMO_text <- str_replace_all(BMO_text, "@\\w+", "")
+BMO_text <- str_replace_all(BMO_text, "[[:punct:]]", "")
+BMO_text <- str_replace_all(BMO_text, "[[:digit:]]", "")
+BMO_text <- str_replace_all(BMO_text, "^ ", "")
+BMO_text <- str_replace_all(BMO_text, "[<].*[>]", "")
+BMO_text <- str_replace_all(BMO_text, "[\n]", "")
+BMO_text <- str_replace_all(BMO_text, "[ |\t]{2,}", "")
+BMO_text = str_replace_all(BMO_text, "^\\s+|\\s+$", "")
+BMO_text = str_replace_all(BMO_text, "&amp", "")
+BMO_text = str_replace_all(BMO_text, "(RT|via)((?:\\b\\W*@\\w+)+)", "")
+BMO_text <- iconv(BMO_text, "UTF-8", "ASCII", sub="")
+head(BMO_text)
+
+```
+
+
+```{r}
+BMO_corpus <- VCorpus(VectorSource(BMO_text))
+BMO_corpus <- tm_map(BMO_corpus, removePunctuation)
+BMO_corpus <- tm_map(BMO_corpus, removeNumbers)
+BMO_corpus <- tm_map(BMO_corpus, stripWhitespace)
+BMO_corpus <- tm_map(BMO_corpus, removeWords, stopwords("english"))
+BMO_corpus <- tm_map(BMO_corpus, content_transformer(stri_trans_tolower))
+
+removeURL <- function(x) gsub("http://[[:alnum:]]*", "", x)
+  BMO_corpus <- tm_map(BMO_corpus, removeURL) 
+  
+    twtrStopWords <- c(stopwords("english"),'rt','http','https', "bank", "bmo")
+  BMO_corpus <- tm_map(BMO_corpus, removeWords, twtrStopWords)
+
+    BMO_corpus <- tm_map(BMO_corpus, PlainTextDocument)
+
+```
+
+
+```{r}
+BMO_tdm <- TermDocumentMatrix(BMO_corpus)
+BMO_tdm <- as.matrix(BMO_tdm)
+BMO_tdm[1:5, 1:5]
+BMO_words <- rowSums(BMO_tdm)
+BMO_words <- sort(rowSums(BMO_tdm), decreasing = TRUE)
+set.seed(400)
+BMO_DF <- data.frame(word=names(BMO_words), count=BMO_words)
+
+   
+
+```
+
+# Wordcloud for BMO
+
+```{r}
+wordcloud(BMO_DF$word, BMO_DF$count, max.words = 100, scale=c(2.5,.5), random.color = TRUE, colors=brewer.pal(9,"Set1")) 
+```
+
+# Most used words in BMO
+
+```{r}
+BMO_DF[1:50,] %>%
+        ggplot(aes(x=(reorder(word, count)), y=count, fill=word)) +
+        geom_bar(stat='identity') + coord_flip() + theme(legend.position = "none") +
+        labs(x="")
+```
+
+#like, lowered, thank, don't, buy
+
+#CIBC
+
+```{r}
+
+
+CIBC_tweet <- CIBC_tweets$text
+CIBC_text_check <- CIBC_tweet[2001:2190]
+CIBC_text <- CIBC_tweet[1:2000]
+
+CIBC_text <- iconv(CIBC_text, to = 'UTF-8')
+head(CIBC_text)
+
+```
+
+
+```{r}
+CIBC_text <- str_replace_all(CIBC_text, "[\\.\\,\\;]+", "")
+CIBC_text <- str_replace_all(CIBC_text, "http\\w+", "")
+CIBC_text <- str_replace_all(CIBC_text, "@\\w+", "")
+CIBC_text <- str_replace_all(CIBC_text, "[[:punct:]]", "")
+CIBC_text <- str_replace_all(CIBC_text, "[[:digit:]]", "")
+CIBC_text <- str_replace_all(CIBC_text, "^ ", "")
+CIBC_text <- str_replace_all(CIBC_text, "[<].*[>]", "")
+CIBC_text <- str_replace_all(CIBC_text, "[\n]", "")
+CIBC_text <- str_replace_all(CIBC_text, "[ |\t]{2,}", "")
+CIBC_text = str_replace_all(CIBC_text, "^\\s+|\\s+$", "")
+CIBC_text = str_replace_all(CIBC_text, "&amp", "")
+CIBC_text = str_replace_all(CIBC_text, "(RT|via)((?:\\b\\W*@\\w+)+)", "")
+CIBC_text <- iconv(CIBC_text, "UTF-8", "ASCII", sub="")
+head(CIBC_text)
+
+```
+
+
+
+```{r}
+CIBC_corpus <- VCorpus(VectorSource(CIBC_text))
+CIBC_corpus <- tm_map(CIBC_corpus, removePunctuation)
+CIBC_corpus <- tm_map(CIBC_corpus, removeNumbers)
+CIBC_corpus <- tm_map(CIBC_corpus, stripWhitespace)
+CIBC_corpus <- tm_map(CIBC_corpus, removeWords, stopwords("english"))
+CIBC_corpus <- tm_map(CIBC_corpus, content_transformer(stri_trans_tolower))
+
+removeURL <- function(x) gsub("http://[[:alnum:]]*", "", x)
+  CIBC_corpus <- tm_map(CIBC_corpus, removeURL) 
+  
+    twtrStopWords <- c(stopwords("english"),'rt','http','https', "cibc", "bank")
+  CIBC_corpus <- tm_map(CIBC_corpus, removeWords, twtrStopWords)
+
+    CIBC_corpus <- tm_map(CIBC_corpus, PlainTextDocument)
+
+```
+
+```{r}
+CIBC_tdm <- TermDocumentMatrix(CIBC_corpus)
+CIBC_tdm <- as.matrix(CIBC_tdm)
+CIBC_tdm[1:5, 1:5]
+CIBC_words <- rowSums(CIBC_tdm)
+CIBC_words <- sort(rowSums(CIBC_tdm), decreasing = TRUE)
+set.seed(400)
+CIBC_DF <- data.frame(word=names(CIBC_words), count=CIBC_words)
+
+   
+
+```
+
+
+# Wordcloud for CIBC
+
+```{r}
+ wordcloud(CIBC_DF$word, CIBC_DF$count, max.words = 100, scale=c(2.5,.5), random.color = TRUE, colors=brewer.pal(9,"Set1")) 
+```
+
+# Most used words in CIBC
+
+```{r}
+CIBC_DF[1:50,] %>%
+        ggplot(aes(x=(reorder(word, count)), y=count, fill=word)) +
+        geom_bar(stat='identity') + coord_flip() + theme(legend.position = "none") +
+        labs(x="")
+```
+#top, like, latest, beat, thank, great
+
+
+
+# Most used words comparison
+
+```{r}
+m1 <- RBC_DF[1:20,] %>%
+        ggplot(aes(x=(reorder(word, count)), y=count, fill=word)) +
+        geom_bar(stat='identity') + coord_flip() + theme(legend.position = "none") +
+        labs(x="")
+ m2 <- TD_DF[1:20,] %>%
+        ggplot(aes(x=(reorder(word, count)), y=count, fill=word)) +
+        geom_bar(stat='identity') + coord_flip() + theme(legend.position = "none") +
+        labs(x="")
+ m3 <- SCOTIA_DF[1:20,] %>%
+        ggplot(aes(x=(reorder(word, count)), y=count, fill=word)) +
+        geom_bar(stat='identity') + coord_flip() + theme(legend.position = "none") +
+        labs(x="")
+ m4 <- BMO_DF[1:20,] %>%
+        ggplot(aes(x=(reorder(word, count)), y=count, fill=word)) +
+        geom_bar(stat='identity') + coord_flip() + theme(legend.position = "none") +
+        labs(x="")
+ m5 <- CIBC_DF[1:20,] %>%
+        ggplot(aes(x=(reorder(word, count)), y=count, fill=word)) +
+        geom_bar(stat='identity') + coord_flip() + theme(legend.position = "none") +
+        labs(x="")
+ 
+
+grid.arrange(m1, m2, m3, m4, m5)
+
+```
+
+# Comparison Cloud
+
+```{r}
+RBC_all <- paste(RBC_text, collapse = " ")
+TD_all <- paste(TD_text, collapse = " ")
+SCOTIA_all <- paste(SCOTIA_text, collapse = " ")
+BMO_all <- paste(BMO_text, collapse = " ")
+CIBC_all <- paste(CIBC_text, collapse = " ")
+
+all_text <- c(RBC_all, TD_all, SCOTIA_all, BMO_all, CIBC_all)
+head(all)
+
+all_corpus <- VCorpus(VectorSource(all_text))
+all_corpus <- tm_map(all_corpus, removePunctuation)
+all_corpus <- tm_map(all_corpus, removeNumbers)
+all_corpus <- tm_map(all_corpus, stripWhitespace)
+all_corpus <- tm_map(all_corpus, removeWords, stopwords("english"))
+all_corpus <- tm_map(all_corpus, content_transformer(stri_trans_tolower))
+
+removeURL <- function(x) gsub("http://[[:alnum:]]*", "", x)
+  all_corpus <- tm_map(all_corpus, removeURL) 
+  
+    twtrStopWords <- c(stopwords("english"),'rt','http','https', "rbc", "cibc", "bmo", "novascotia", "scotia", "nova", "td", "royal", "bank", "canada")
+  all_corpus <- tm_map(all_corpus, removeWords, twtrStopWords)
+
+    all_corpus <- tm_map(all_corpus, PlainTextDocument)
+
+
+    
+    all_tdm <- TermDocumentMatrix(all_corpus)
+all_tdm <- as.matrix(all_tdm)
+
+
+colnames(all_tdm) <- c("RBC", "TD", "SCOTIA", "BMO", "CIBC")
+
+
+comparison.cloud(all_tdm, colors = c("red", "blue", "green", "yellow", "black"), scale=c(2.3,.3), max.words = 100)
+```
+
