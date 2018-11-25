@@ -1,0 +1,180 @@
+---
+title: "Topic Modelling"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+# Topic modelling
+
+
+
+# RBC
+
+```{r}
+
+
+    RBC_tdm <- DocumentTermMatrix(RBC_corpus) 
+
+unique_indexes <- unique(RBC_tdm$i) # get the index of each unique value
+RBC_tdm <- RBC_tdm[unique_indexes, ] 
+    
+    
+    
+
+RBC_lda <- LDA(RBC_tdm, k = 4, control = list(seed = 1234))
+
+RBC_topics <- tidy(RBC_lda, matrix = "beta")
+
+RBC_top_terms <- RBC_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+RBC_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+
+
+```
+
+# TD
+
+```{r}
+    TD_tdm <- DocumentTermMatrix(TD_corpus) 
+
+unique_indexes <- unique(TD_tdm$i) 
+TD_tdm <- TD_tdm[unique_indexes, ] 
+ 
+TD_lda <- LDA(TD_tdm, k = 4, control = list(seed = 1234))
+
+TD_topics <- tidy(TD_lda, matrix = "beta")
+
+TD_top_terms <- TD_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+TD_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+```
+
+
+# SCOTIA
+
+```{r}
+SCOTIA_tdm <- DocumentTermMatrix(SCOTIA_corpus) 
+
+unique_indexes <- unique(SCOTIA_tdm$i) 
+SCOTIA_tdm <- SCOTIA_tdm[unique_indexes, ] 
+ 
+SCOTIA_lda <- LDA(SCOTIA_tdm, k = 4, control = list(seed = 1234))
+
+SCOTIA_topics <- tidy(SCOTIA_lda, matrix = "beta")
+
+SCOTIA_top_terms <- SCOTIA_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+SCOTIA_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+
+```
+
+# BMO
+
+```{r}
+BMO_tdm <- DocumentTermMatrix(BMO_corpus) 
+
+unique_indexes <- unique(BMO_tdm$i) 
+BMO_tdm <- BMO_tdm[unique_indexes, ] 
+ 
+BMO_lda <- LDA(BMO_tdm, k = 4, control = list(seed = 1234))
+
+BMO_topics <- tidy(BMO_lda, matrix = "beta")
+
+BMO_top_terms <- BMO_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+BMO_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+
+```
+
+
+
+# CIBC
+
+```{r}
+CIBC_tdm <- DocumentTermMatrix(CIBC_corpus) 
+
+unique_indexes <- unique(CIBC_tdm$i) 
+CIBC_tdm <- CIBC_tdm[unique_indexes, ] 
+ 
+CIBC_lda <- LDA(CIBC_tdm, k = 4, control = list(seed = 1234))
+
+CIBC_topics <- tidy(CIBC_lda, matrix = "beta")
+
+CIBC_top_terms <- CIBC_topics %>%
+  group_by(topic) %>%
+  top_n(10, beta) %>%
+  ungroup() %>%
+  arrange(topic, -beta)
+
+CIBC_top_terms %>%
+  mutate(term = reorder(term, beta)) %>%
+  ggplot(aes(term, beta, fill = factor(topic))) +
+  geom_col(show.legend = FALSE) +
+  facet_wrap(~ topic, scales = "free") +
+  coord_flip()
+
+
+```
+
+
