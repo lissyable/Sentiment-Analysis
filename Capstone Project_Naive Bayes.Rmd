@@ -1,0 +1,613 @@
+---
+title: "Naive Bayes"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+```{r}
+
+RBC_sentimentscore <- get_sentiment(RBC_text)
+head(RBC_sentimentscore)
+class(RBC_text)
+RBC_tweet$polarity <- RBC_sentimentscore
+RBC_tweets_F <- RBC_tweet[, c('RBC_tweet', 'polarity')]
+head(RBC_tweets_F)
+RBC_tweets_F <- RBC_tweets_F[RBC_tweets_F$polarity != 0, ]
+RBC_tweets_F$sentiment <- ifelse(RBC_tweets_F$polarity < 0, "Negative", "Positive")
+RBC_tweets_F$sentiment <- as.factor(RBC_tweets_F$sentiment)
+table(RBC_tweets_F$sentiment)
+RBC_tweets_Full <- RBC_tweets_F[ ,c(1,3)]
+head(RBC_tweets_Full)
+RBC_tweets_Full$sentiment <- as.factor(RBC_tweets_Full$sentiment)
+table(RBC_tweets_Full$sentiment)
+
+```
+
+# Original dataset
+
+```{r}
+set.seed(1)
+RBC_tweets_Full <- RBC_tweets_Full[sample(nrow(RBC_tweets_Full)), ]
+RBC_tweets_Full <- RBC_tweets_Full[sample(nrow(RBC_tweets_Full)), ]
+```
+
+
+
+```{r}
+
+RBC_tweets_F_corpus <- VCorpus(VectorSource(RBC_tweets_Full$RBC_tweet))
+
+RBC_tweets_F_corpus <- tm_map(RBC_tweets_F_corpus, removeNumbers)
+RBC_tweets_F_corpus <- tm_map(RBC_tweets_F_corpus, removePunctuation)
+RBC_tweets_F_corpus <- tm_map(RBC_tweets_F_corpus, content_transformer(tolower))
+RBC_tweets_F_corpus <- tm_map(RBC_tweets_F_corpus, removeWords, 
+                           stopwords("english"))
+RBC_tweets_F_corpus <- tm_map(RBC_tweets_F_corpus, stripWhitespace)
+
+
+RBC_tweets_F_tdm <- DocumentTermMatrix(RBC_tweets_F_corpus)
+dim(RBC_tweets_F_tdm)
+RBC_tweets_F_tdm <- removeSparseTerms(RBC_tweets_F_tdm, 0.99)
+dim(RBC_tweets_F_tdm)
+inspect(RBC_tweets_F_tdm[1:20, 10:20])
+
+```
+
+
+```{r}
+RBC_tweets_F_tdm <- weightBin(RBC_tweets_F_tdm)
+RBC_tweets_F_tdm_df <- as.data.frame(as.matrix(RBC_tweets_F_tdm))
+set.seed(443452342)
+
+RBC_tweets_F_train <- RBC_tweets_Full[1:1591, ]
+RBC_tweets_F_test <- RBC_tweets_Full[1592:2271, ]
+table(RBC_tweets_F_train$sentiment)
+
+RBC_tweets_F_tdm_train <- RBC_tweets_F_tdm_df[1:1591, ]
+RBC_tweets_F_tdm_test <- RBC_tweets_F_tdm_df[1592:2271, ]
+dim(RBC_tweets_F_tdm_train)
+dim(RBC_tweets_F_tdm_test)
+
+```
+
+
+
+```{r}
+RBC_classifer <- naiveBayes(RBC_tweets_F_tdm_train, RBC_tweets_F_train$sentiment, laplace = 1)
+RBC_pred <- predict(RBC_classifer, RBC_tweets_F_tdm_test)
+
+
+confusionMatrix(RBC_pred, RBC_tweets_F_test$sentiment)
+```
+
+
+```{r}
+
+CtrlCV = trainControl(method = "cv", number = 10)
+
+
+modelNB = train(RBC_tweets_F_tdm_train, RBC_tweets_F_train$sentiment, method = "naive_bayes", trControl = CtrlCV)
+
+RBC_pred <- predict(modelNB, RBC_tweets_F_tdm_test)
+
+
+confusionMatrix(RBC_pred, RBC_tweets_F_test$sentiment)
+
+
+```
+
+
+
+# Upsample Method
+
+
+
+```{r}
+set.seed(1)
+RBC_tweets_Full <- RBC_tweets_Full[sample(nrow(RBC_tweets_Full)), ]
+RBC_tweets_Full <- RBC_tweets_Full[sample(nrow(RBC_tweets_Full)), ]
+```
+
+
+```{r}
+RBC_tweets_F_train <- RBC_tweets_Full[1:1591, ]
+RBC_tweets_F_test <- RBC_tweets_Full[1592:2271, ]
+table(RBC_tweets_F_train$sentiment)
+```
+
+
+
+```{r}
+RBC_tweets_F_train_up <- upSample(RBC_tweets_F_train$RBC_tweet, RBC_tweets_F_train$sentiment)
+table(RBC_tweets_F_train_up$Class)
+
+RBC_tweets_F_test_up <- RBC_tweets_F_test
+```
+
+
+
+```{r}
+set.seed(1)
+RBC_tweets_F_train_up <- RBC_tweets_F_train_up[sample(nrow(RBC_tweets_F_train_up)), ]
+RBC_tweets_F_train_up <- RBC_tweets_F_train_up[sample(nrow(RBC_tweets_F_train_up)), ]
+```
+
+
+```{r}
+
+```
+
+
+```{r}
+RBC_trainmatrix_up <- create_matrix(RBC_tweets_F_train_up$x, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+RBC_testmatrix_up <- create_matrix(RBC_tweets_F_test_up$RBC_tweet, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = RBC_trainmatrix_up)
+ RBC_trainmatrix_up <- weightBin(RBC_trainmatrix_up)
+RBC_trainmatrix_up <- as.data.frame(as.matrix(RBC_trainmatrix_up))
+
+RBC_testmatrix_up <- weightBin(RBC_testmatrix_up)
+RBC_testmatrix_up <- as.data.frame(as.matrix(RBC_testmatrix_up))
+
+
+```
+
+
+```{r}
+RBC_naive_classifer_up <- naiveBayes(RBC_trainmatrix_up, RBC_tweets_F_train_up$Class, laplace = 1)
+RBC_naive_pred_up <- predict(RBC_naive_classifer_up, RBC_testmatrix_up)
+
+
+confusionMatrix(RBC_naive_pred_up, RBC_tweets_F_test_up$sentiment)
+```
+
+
+```{r}
+
+CtrlCV = trainControl(method = "cv", number = 10)
+
+
+RBC_modelNB_up = train(RBC_trainmatrix_up, RBC_tweets_F_train_up$Class, method = "naive_bayes", trControl = CtrlCV)
+
+RBC_pred_up <- predict(RBC_modelNB_up, RBC_testmatrix_up)
+
+
+confusionMatrix(RBC_pred_up, RBC_tweets_F_test_up$sentiment)
+
+```
+
+# Downsample Method
+
+
+```{r}
+RBC_tweets_F_train_down <- downSample(RBC_tweets_F_train$RBC_tweet, RBC_tweets_F_train$sentiment)
+table(RBC_tweets_F_train_down$Class)
+
+RBC_tweets_F_test_down <- RBC_tweets_F_test
+```
+
+
+
+```{r}
+set.seed(1)
+RBC_tweets_F_train_down <- RBC_tweets_F_train_down[sample(nrow(RBC_tweets_F_train_down)), ]
+RBC_tweets_F_train_down <- RBC_tweets_F_train_down[sample(nrow(RBC_tweets_F_train_down)), ]
+```
+
+
+```{r}
+RBC_trainmatrix_down <- create_matrix(RBC_tweets_F_train_down$x, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+RBC_testmatrix_down <- create_matrix(RBC_tweets_F_test_down$RBC_tweet, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = RBC_trainmatrix_down)
+# trace("create_matrix",edit=T)
+ RBC_trainmatrix_down <- weightBin(RBC_trainmatrix_down)
+RBC_trainmatrix_down <- as.data.frame(as.matrix(RBC_trainmatrix_down))
+
+RBC_testmatrix_down <- weightBin(RBC_testmatrix_down)
+RBC_testmatrix_down <- as.data.frame(as.matrix(RBC_testmatrix_down))
+
+
+```
+
+
+```{r}
+RBC_naive_classifer_down <- naiveBayes(RBC_trainmatrix_down, RBC_tweets_F_train_down$Class, laplace = 1)
+RBC_naive_pred_down <- predict(RBC_naive_classifer_down, RBC_testmatrix_down)
+
+
+confusionMatrix(RBC_naive_pred_down, RBC_tweets_F_test_down$sentiment)
+```
+
+
+```{r}
+
+CtrlCV = trainControl(method = "cv", number = 10)
+
+
+RBC_modelNB_down = train(RBC_trainmatrix_down, RBC_tweets_F_train_down$Class, method = "naive_bayes", trControl = CtrlCV)
+
+RBC_pred_down <- predict(RBC_modelNB_down, RBC_testmatrix_down)
+
+
+confusionMatrix(RBC_pred_down, RBC_tweets_F_test_down$sentiment)
+
+```
+
+# SMOTE Method
+
+
+
+```{r}
+
+as.data.frame(table(RBC_tweets_F_train$sentiment))
+RBC_tweets_F_train_smote <- SMOTE(sentiment ~ ., data=RBC_tweets_F_train, k=5, perc.over = 250, perc.under = 150, learner=NULL)
+
+table(RBC_tweets_F_train_smote$sentiment)
+
+RBC_tweets_F_test_smote <- RBC_tweets_F_test
+```
+
+
+
+```{r}
+set.seed(1)
+RBC_tweets_F_train_smote <- RBC_tweets_F_train_smote[sample(nrow(RBC_tweets_F_train_smote)), ]
+RBC_tweets_F_train_smote <- RBC_tweets_F_train_smote[sample(nrow(RBC_tweets_F_train_smote)), ]
+```
+
+
+```{r}
+RBC_trainmatrix_smote <- create_matrix(RBC_tweets_F_train_smote$RBC_tweet, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+RBC_testmatrix_smote <- create_matrix(RBC_tweets_F_test_smote$RBC_tweet, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = RBC_trainmatrix_smote)
+ RBC_trainmatrix_smote <- weightBin(RBC_trainmatrix_smote)
+RBC_trainmatrix_smote <- as.data.frame(as.matrix(RBC_trainmatrix_smote))
+
+RBC_testmatrix_smote <- weightBin(RBC_testmatrix_smote)
+RBC_testmatrix_smote <- as.data.frame(as.matrix(RBC_testmatrix_smote))
+
+
+```
+
+
+```{r}
+RBC_naive_classifer_smote <- naiveBayes(RBC_trainmatrix_smote, RBC_tweets_F_train_smote$sentiment, laplace = 1)
+RBC_naive_pred_smote <- predict(RBC_naive_classifer_smote, RBC_testmatrix_smote)
+
+
+confusionMatrix(RBC_naive_pred_smote, RBC_tweets_F_test_smote$sentiment)
+```
+
+
+
+
+```{r}
+
+CtrlCV = trainControl(method = "cv", number = 10)
+
+
+RBC_modelNB_smote = train(RBC_trainmatrix_smote, RBC_tweets_F_train_smote$sentiment, method = "naive_bayes", trControl = CtrlCV)
+
+RBC_pred_smote <- predict(RBC_modelNB_smote, RBC_testmatrix_smote)
+
+
+confusionMatrix(RBC_pred_smote, RBC_tweets_F_test_smote$sentiment)
+
+```
+
+
+# TD
+
+```{r}
+TD_sentimentscore <- get_sentiment(TD_text)
+head(TD_sentimentscore)
+class(TD_text)
+head(TD_tweet)
+TD_tweet$polarity <- TD_sentimentscore
+TD_tweets_F <- TD_tweet[, c('TD_tweet', 'polarity')]
+head(TD_tweets_F)
+TD_tweets_F <- TD_tweets_F[TD_tweets_F$polarity != 0, ]
+TD_tweets_F$sentiment <- ifelse(TD_tweets_F$polarity < 0, "Negative", "Positive")
+TD_tweets_F$sentiment <- as.factor(TD_tweets_F$sentiment)
+table(TD_tweets_F$sentiment)
+TD_tweets_Full <- TD_tweets_F[ ,c(1,3)]
+head(TD_tweets_Full)
+TD_tweets_Full$sentiment <- as.factor(TD_tweets_Full$sentiment)
+table(TD_tweets_Full$sentiment)
+
+set.seed(1)
+TD_tweets_Full <- TD_tweets_Full[sample(nrow(TD_tweets_Full)), ]
+TD_tweets_Full <- TD_tweets_Full[sample(nrow(TD_tweets_Full)), ]
+```
+
+
+```{r}
+TD_tweets_F_corpus <- VCorpus(VectorSource(TD_tweets_Full$TD_tweet))
+
+TD_tweets_F_corpus <- tm_map(TD_tweets_F_corpus, removeNumbers)
+TD_tweets_F_corpus <- tm_map(TD_tweets_F_corpus, removePunctuation)
+TD_tweets_F_corpus <- tm_map(TD_tweets_F_corpus, content_transformer(tolower))
+TD_tweets_F_corpus <- tm_map(TD_tweets_F_corpus, removeWords, 
+                           stopwords("english"))
+TD_tweets_F_corpus <- tm_map(TD_tweets_F_corpus, stripWhitespace)
+
+
+TD_tweets_F_tdm <- DocumentTermMatrix(TD_tweets_F_corpus)
+dim(TD_tweets_F_tdm)
+TD_tweets_F_tdm <- removeSparseTerms(TD_tweets_F_tdm, 0.99)
+dim(TD_tweets_F_tdm)
+inspect(TD_tweets_F_tdm[1:20, 10:20])
+
+```
+
+
+```{r}
+TD_tweets_F_tdm <- weightBin(TD_tweets_F_tdm)
+TD_tweets_F_tdm_df <- as.data.frame(as.matrix(TD_tweets_F_tdm))
+set.seed(443452342)
+TD_tweets_F_train <- TD_tweets_Full[1:1926, ]
+TD_tweets_F_test <- TD_tweets_Full[1927:2751, ]
+table(TD_tweets_F_train$sentiment)
+
+TD_tweets_F_tdm_train <- TD_tweets_F_tdm_df[1:1926, ]
+TD_tweets_F_tdm_test <- TD_tweets_F_tdm_df[1927:2751, ]
+dim(TD_tweets_F_tdm_train)
+dim(TD_tweets_F_tdm_test)
+
+```
+
+
+```{r}
+TD_classifer <- naiveBayes(TD_tweets_F_tdm_train, TD_tweets_F_train$sentiment, laplace = 1)
+TD_pred <- predict(TD_classifer, TD_tweets_F_tdm_test)
+
+confusionMatrix(TD_pred, TD_tweets_F_test$sentiment)
+CtrlCV = trainControl(method = "cv", number = 10)
+
+modelNB = train(TD_tweets_F_tdm_train, TD_tweets_F_train$sentiment, method = "naive_bayes", trControl = CtrlCV)
+
+TD_pred <- predict(modelNB, TD_tweets_F_tdm_test)
+confusionMatrix(TD_pred, TD_tweets_F_test$sentiment)
+
+```
+
+# SCOTIA
+
+```{r}
+SCOTIA_sentimentscore <- get_sentiment(SCOTIA_text)
+head(SCOTIA_sentimentscore)
+class(SCOTIA_text)
+SCOTIA_tweet$polarity <- SCOTIA_sentimentscore
+SCOTIA_tweets_F <- SCOTIA_tweet[, c('SCOTIA_tweet', 'polarity')]
+head(SCOTIA_tweets_F)
+SCOTIA_tweets_F <- SCOTIA_tweets_F[SCOTIA_tweets_F$polarity != 0, ]
+SCOTIA_tweets_F$sentiment <- ifelse(SCOTIA_tweets_F$polarity < 0, "Negative", "Positive")
+SCOTIA_tweets_F$sentiment <- as.factor(SCOTIA_tweets_F$sentiment)
+table(SCOTIA_tweets_F$sentiment)
+SCOTIA_tweets_Full <- SCOTIA_tweets_F[ ,c(1,3)]
+head(SCOTIA_tweets_Full)
+SCOTIA_tweets_Full$sentiment <- as.factor(SCOTIA_tweets_Full$sentiment)
+table(SCOTIA_tweets_Full$sentiment)
+
+set.seed(1)
+SCOTIA_tweets_Full <- SCOTIA_tweets_Full[sample(nrow(SCOTIA_tweets_Full)), ]
+SCOTIA_tweets_Full <- SCOTIA_tweets_Full[sample(nrow(SCOTIA_tweets_Full)), ]
+```
+
+
+```{r}
+SCOTIA_tweets_F_corpus <- VCorpus(VectorSource(SCOTIA_tweets_Full$SCOTIA_tweet))
+
+SCOTIA_tweets_F_corpus <- tm_map(SCOTIA_tweets_F_corpus, removeNumbers)
+SCOTIA_tweets_F_corpus <- tm_map(SCOTIA_tweets_F_corpus, removePunctuation)
+SCOTIA_tweets_F_corpus <- tm_map(SCOTIA_tweets_F_corpus, content_transformer(tolower))
+SCOTIA_tweets_F_corpus <- tm_map(SCOTIA_tweets_F_corpus, removeWords, 
+                           stopwords("english"))
+SCOTIA_tweets_F_corpus <- tm_map(SCOTIA_tweets_F_corpus, stripWhitespace)
+
+SCOTIA_tweets_F_tdm <- DocumentTermMatrix(SCOTIA_tweets_F_corpus)
+dim(SCOTIA_tweets_F_tdm)
+SCOTIA_tweets_F_tdm <- removeSparseTerms(SCOTIA_tweets_F_tdm, 0.99)
+dim(SCOTIA_tweets_F_tdm)
+inspect(SCOTIA_tweets_F_tdm[1:20, 10:20])
+
+SCOTIA_tweets_F_tdm <- weightBin(SCOTIA_tweets_F_tdm)
+SCOTIA_tweets_F_tdm_df <- as.data.frame(as.matrix(SCOTIA_tweets_F_tdm))
+set.seed(443452342)
+SCOTIA_tweets_F_train <- SCOTIA_tweets_Full[1:1041, ]
+SCOTIA_tweets_F_test <- SCOTIA_tweets_Full[1042:1486, ]
+table(SCOTIA_tweets_F_train$sentiment)
+
+SCOTIA_tweets_F_tdm_train <- SCOTIA_tweets_F_tdm_df[1:1041, ]
+SCOTIA_tweets_F_tdm_test <- SCOTIA_tweets_F_tdm_df[1042:1486, ]
+dim(SCOTIA_tweets_F_tdm_train)
+dim(SCOTIA_tweets_F_tdm_test)
+SCOTIA_classifer <- naiveBayes(SCOTIA_tweets_F_tdm_train, SCOTIA_tweets_F_train$sentiment, laplace = 1)
+SCOTIA_pred <- predict(SCOTIA_classifer, SCOTIA_tweets_F_tdm_test)
+
+confusionMatrix(SCOTIA_pred, SCOTIA_tweets_F_test$sentiment)
+CtrlCV = trainControl(method = "cv", number = 10)
+
+modelNB = train(SCOTIA_tweets_F_tdm_train, SCOTIA_tweets_F_train$sentiment, method = "naive_bayes", trControl = CtrlCV)
+
+SCOTIA_pred <- predict(modelNB, SCOTIA_tweets_F_tdm_test)
+confusionMatrix(SCOTIA_pred, SCOTIA_tweets_F_test$sentiment)
+
+```
+
+# BMO
+
+```{r}
+BMO_sentimentscore <- get_sentiment(BMO_text)
+head(BMO_sentimentscore)
+class(BMO_text)
+BMO_tweet$polarity <- BMO_sentimentscore
+BMO_tweets_F <- BMO_tweet[, c('BMO_tweet', 'polarity')]
+head(BMO_tweets_F)
+BMO_tweets_F <- BMO_tweets_F[BMO_tweets_F$polarity != 0, ]
+BMO_tweets_F$sentiment <- ifelse(BMO_tweets_F$polarity < 0, "Negative", "Positive")
+BMO_tweets_F$sentiment <- as.factor(BMO_tweets_F$sentiment)
+table(BMO_tweets_F$sentiment)
+BMO_tweets_Full <- BMO_tweets_F[ ,c(1,3)]
+head(BMO_tweets_Full)
+BMO_tweets_Full$sentiment <- as.factor(BMO_tweets_Full$sentiment)
+table(BMO_tweets_Full$sentiment)
+
+set.seed(1)
+BMO_tweets_Full <- BMO_tweets_Full[sample(nrow(BMO_tweets_Full)), ]
+BMO_tweets_Full <- BMO_tweets_Full[sample(nrow(BMO_tweets_Full)), ]
+
+```
+
+
+```{r}
+BMO_tweets_F_corpus <- VCorpus(VectorSource(BMO_tweets_Full$BMO_tweet))
+
+BMO_tweets_F_corpus <- tm_map(BMO_tweets_F_corpus, removeNumbers)
+BMO_tweets_F_corpus <- tm_map(BMO_tweets_F_corpus, removePunctuation)
+BMO_tweets_F_corpus <- tm_map(BMO_tweets_F_corpus, content_transformer(tolower))
+BMO_tweets_F_corpus <- tm_map(BMO_tweets_F_corpus, removeWords, 
+                           stopwords("english"))
+BMO_tweets_F_corpus <- tm_map(BMO_tweets_F_corpus, stripWhitespace)
+
+BMO_tweets_F_tdm <- DocumentTermMatrix(BMO_tweets_F_corpus)
+dim(BMO_tweets_F_tdm)
+BMO_tweets_F_tdm <- removeSparseTerms(BMO_tweets_F_tdm, 0.99)
+dim(BMO_tweets_F_tdm)
+inspect(BMO_tweets_F_tdm[1:20, 10:20])
+
+BMO_tweets_F_tdm <- weightBin(BMO_tweets_F_tdm)
+BMO_tweets_F_tdm_df <- as.data.frame(as.matrix(BMO_tweets_F_tdm))
+set.seed(443452342)
+BMO_tweets_F_train <- BMO_tweets_Full[1:1585, ]
+BMO_tweets_F_test <- BMO_tweets_Full[1586:2263, ]
+table(BMO_tweets_F_train$sentiment)
+
+BMO_tweets_F_tdm_train <- BMO_tweets_F_tdm_df[1:1585, ]
+BMO_tweets_F_tdm_test <- BMO_tweets_F_tdm_df[1586:2263, ]
+dim(BMO_tweets_F_tdm_train)
+dim(BMO_tweets_F_tdm_test)
+BMO_classifer <- naiveBayes(BMO_tweets_F_tdm_train, BMO_tweets_F_train$sentiment, laplace = 1)
+BMO_pred <- predict(BMO_classifer, BMO_tweets_F_tdm_test)
+
+confusionMatrix(BMO_pred, BMO_tweets_F_test$sentiment)
+CtrlCV = trainControl(method = "cv", number = 10)
+
+modelNB = train(BMO_tweets_F_tdm_train, BMO_tweets_F_train$sentiment, method = "naive_bayes", trControl = CtrlCV)
+
+BMO_pred <- predict(modelNB, BMO_tweets_F_tdm_test)
+confusionMatrix(BMO_pred, BMO_tweets_F_test$sentiment)
+
+```
+
+# CIBC
+
+```{r}
+CIBC_sentimentscore <- get_sentiment(CIBC_text)
+head(CIBC_sentimentscore)
+class(CIBC_text)
+CIBC_tweet$polarity <- CIBC_sentimentscore
+CIBC_tweets_F <- CIBC_tweet[, c('CIBC_tweet', 'polarity')]
+head(CIBC_tweets_F)
+CIBC_tweets_F <- CIBC_tweets_F[CIBC_tweets_F$polarity != 0, ]
+CIBC_tweets_F$sentiment <- ifelse(CIBC_tweets_F$polarity < 0, "Negative", "Positive")
+CIBC_tweets_F$sentiment <- as.factor(CIBC_tweets_F$sentiment)
+table(CIBC_tweets_F$sentiment)
+CIBC_tweets_Full <- CIBC_tweets_F[ ,c(1,3)]
+head(CIBC_tweets_Full)
+CIBC_tweets_Full$sentiment <- as.factor(CIBC_tweets_Full$sentiment)
+table(CIBC_tweets_Full$sentiment)
+
+set.seed(1)
+CIBC_tweets_Full <- CIBC_tweets_Full[sample(nrow(CIBC_tweets_Full)), ]
+CIBC_tweets_Full <- CIBC_tweets_Full[sample(nrow(CIBC_tweets_Full)), ]
+
+```
+
+
+```{r}
+CIBC_tweets_F_corpus <- VCorpus(VectorSource(CIBC_tweets_Full$CIBC_tweet))
+
+CIBC_tweets_F_corpus <- tm_map(CIBC_tweets_F_corpus, removeNumbers)
+CIBC_tweets_F_corpus <- tm_map(CIBC_tweets_F_corpus, removePunctuation)
+CIBC_tweets_F_corpus <- tm_map(CIBC_tweets_F_corpus, content_transformer(tolower))
+CIBC_tweets_F_corpus <- tm_map(CIBC_tweets_F_corpus, removeWords, 
+                           stopwords("english"))
+CIBC_tweets_F_corpus <- tm_map(CIBC_tweets_F_corpus, stripWhitespace)
+
+CIBC_tweets_F_tdm <- DocumentTermMatrix(CIBC_tweets_F_corpus)
+dim(CIBC_tweets_F_tdm)
+CIBC_tweets_F_tdm <- removeSparseTerms(CIBC_tweets_F_tdm, 0.99)
+dim(CIBC_tweets_F_tdm)
+inspect(CIBC_tweets_F_tdm[1:20, 10:20])
+
+CIBC_tweets_F_tdm <- weightBin(CIBC_tweets_F_tdm)
+CIBC_tweets_F_tdm_df <- as.data.frame(as.matrix(CIBC_tweets_F_tdm))
+set.seed(443452342)
+CIBC_tweets_F_train <- CIBC_tweets_Full[1:950, ]
+CIBC_tweets_F_test <- CIBC_tweets_Full[951:1357, ]
+table(CIBC_tweets_F_train$sentiment)
+
+CIBC_tweets_F_tdm_train <- CIBC_tweets_F_tdm_df[1:950, ]
+CIBC_tweets_F_tdm_test <- CIBC_tweets_F_tdm_df[951:1357, ]
+dim(CIBC_tweets_F_tdm_train)
+dim(CIBC_tweets_F_tdm_test)
+CIBC_classifer <- naiveBayes(CIBC_tweets_F_tdm_train, CIBC_tweets_F_train$sentiment, laplace = 1)
+CIBC_pred <- predict(CIBC_classifer, CIBC_tweets_F_tdm_test)
+
+confusionMatrix(CIBC_pred, CIBC_tweets_F_test$sentiment)
+CtrlCV = trainControl(method = "cv", number = 10)
+
+modelNB = train(CIBC_tweets_F_tdm_train, CIBC_tweets_F_train$sentiment, method = "naive_bayes", trControl = CtrlCV)
+
+CIBC_pred <- predict(modelNB, CIBC_tweets_F_tdm_test)
+confusionMatrix(CIBC_pred, CIBC_tweets_F_test$sentiment)
+
+```
+

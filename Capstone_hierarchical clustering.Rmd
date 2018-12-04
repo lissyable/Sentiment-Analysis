@@ -1,0 +1,138 @@
+---
+title: "Hierarchical Clustering"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+
+
+# RBC
+
+```{r}
+
+RBC_tdm <- TermDocumentMatrix(RBC_corpus, control = list(minWordLength = 1))
+
+RBC_tdm <- removeSparseTerms(RBC_tdm, sparse = 0.98)
+RBC_tdm <- as.data.frame(RBC_tdm)
+
+RBC_dist <- dist(scale(RBC_tdm), method = "euclidean")
+RBC_fit <- hclust(RBC_dist, method = "ward.D")
+plot(RBC_fit)
+
+RBC_group <- cutree(RBC_fit, k = 5)
+RBC_group
+rect.hclust(RBC_fit, k = 5, border = "green")
+
+```
+
+# Beloit and regal
+# analysts,markets,outperform,price,rating,sector,shares,stock,today,target
+# new,amp,canadian,now,just,thnk,like,one,great,can,get,time
+
+# TD
+
+```{r}
+TD_tdm <- TermDocumentMatrix(TD_corpus, control = list(minWordLength = 1))
+
+TD_tdm <- removeSparseTerms(TD_tdm, sparse = 0.98)
+
+
+TD_dist <- dist(scale(TD_tdm), method = "euclidean")
+TD_fit <- hclust(TD_dist, method = "ward.D")
+plot(TD_fit)
+
+TD_group <- cutree(TD_fit, k = 8)
+TD_group
+rect.hclust(TD_fit, k = 8, border = "green")
+
+```
+
+# work,latest,job,careerarc,hiring
+# via,past,stats,day,last
+# get,will,tds,like,seson,team,dont,know,good,bank,see,great,time
+
+
+# SCOTIA
+
+
+```{r}
+SCOTIA_tdm <- TermDocumentMatrix(SCOTIA_corpus, control = list(minWordLength = 1))
+
+SCOTIA_tdm <- removeSparseTerms(SCOTIA_tdm, sparse = 0.98)
+
+SCOTIA_dist <- dist(scale(SCOTIA_tdm), method = "euclidean")
+SCOTIA_fit <- hclust(SCOTIA_dist, method = "ward.D")
+plot(SCOTIA_fit)
+
+SCOTIA_group <- cutree(SCOTIA_fit, k = 8)
+SCOTIA_group
+rect.hclust(SCOTIA_fit, k = 8, border = "green")
+
+
+```
+
+# canadian,veterans,war,access,denied,vet
+# will,just,right,says,history,one,can,amp,bank,see,day,health,across,now
+
+
+
+# BMO
+
+```{r}
+BMO_tdm <- TermDocumentMatrix(BMO_corpus, control = list(minWordLength = 1))
+
+BMO_tdm <- removeSparseTerms(BMO_tdm, sparse = 0.98)
+
+BMO_dist <- dist(scale(BMO_tdm), method = "euclidean")
+BMO_fit <- hclust(BMO_dist, method = "ward.D")
+plot(BMO_fit)
+
+BMO_group <- cutree(BMO_fit, k = 8)
+BMO_group
+rect.hclust(BMO_fit, k = 8, border = "green")
+
+```
+
+# atikus,mocks,nstaff,minimum,wage
+# rating,new,today,expected,report,analysts,market,lowered,given,hold,stocks
+# amp,will,like,time
+
+# CIBC
+
+```{r}
+CIBC_tdm <- TermDocumentMatrix(CIBC_corpus, control = list(minWordLength = 1))
+
+CIBC_tdm <- removeSparseTerms(CIBC_tdm, sparse = 0.98)
+
+CIBC_dist <- dist(scale(CIBC_tdm), method = "euclidean")
+CIBC_fit <- hclust(CIBC_dist, method = "ward.D")
+plot(CIBC_fit)
+
+CIBC_group <- cutree(CIBC_fit, k = 8)
+CIBC_group
+rect.hclust(CIBC_fit, k = 8, border = "green")
+
+
+```
+
+# gundy,wood,latest,click,isg,beat,daily,market,read
+# top,security,among,phishing,used,attacks,brands
+# banking,card,visa,amp,account,new,get,can,great,thanks,canadian,firstcaribean,experience,please,like,thank

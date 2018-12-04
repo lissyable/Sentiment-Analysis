@@ -1,0 +1,240 @@
+---
+title: "correlation"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+# RBC
+
+
+```{r}
+
+RBC_tidy <- tidy(RBC_corpus)
+RBC_section_words <- RBC_tidy %>%
+    mutate(section = row_number() %/% 10) %>%
+  filter(section > 0) %>%
+  unnest_tokens(word, text) %>%
+  filter(!word %in% stop_words$word)
+
+```
+
+# count common pairs of words co-appearing within the section
+
+```{r}
+RBC_word_pairs <- RBC_section_words %>%
+  pairwise_count(word, section, sort = TRUE)
+
+```
+
+# count common pairs of words co-appearing with "capital"
+
+```{r}
+RBC_word_pairs %>%
+  filter(item1 == "capital")
+
+```
+
+# How often the words appear in the same section
+
+```{r}
+RBC_word_cors <- RBC_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 30) %>%
+  pairwise_cor(word, section, sort = TRUE)
+
+```
+
+# How often the word "capital" appear in the same section
+
+```{r}
+RBC_word_cors %>%
+  filter(item1 == "capital")
+```
+
+# visualize the correlations and clusters of words 
+
+```{r}
+RBC_word_cors %>%
+  filter(correlation > .8) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+```
+
+
+# media and internet, regal and beloit, sector and perform
+
+
+# TD
+
+
+```{r}
+
+TD_tidy <- tidy(TD_corpus)
+TD_section_words <- TD_tidy %>%
+    mutate(section = row_number() %/% 10) %>%
+  filter(section > 0) %>%
+  unnest_tokens(word, text) %>%
+  filter(!word %in% stop_words$word)
+
+# count common pairs of words co-appearing within the section
+
+TD_word_pairs <- TD_section_words %>%
+  pairwise_count(word, section, sort = TRUE)
+
+TD_word_pairs %>%
+  filter(item1 == "hiring")
+
+TD_word_cors <- TD_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 30) %>%
+  pairwise_cor(word, section, sort = TRUE)
+
+TD_word_cors %>%
+  filter(item1 == "hiring")
+
+
+TD_word_cors %>%
+  filter(correlation > .8) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+
+```
+
+# click and apply, crunching and daynew, job, hiring and careerarc, crowdfire, miss and doesnt
+
+# SCOTIA
+
+```{r}
+SCOTIA_tidy <- tidy(SCOTIA_corpus)
+SCOTIA_section_words <- SCOTIA_tidy %>%
+    mutate(section = row_number() %/% 10) %>%
+  filter(section > 0) %>%
+  unnest_tokens(word, text) %>%
+  filter(!word %in% stop_words$word)
+
+# count common pairs of words co-appearing within the section
+
+SCOTIA_word_pairs <- SCOTIA_section_words %>%
+  pairwise_count(word, section, sort = TRUE)
+
+SCOTIA_word_pairs %>%
+  filter(item1 == "access")
+
+SCOTIA_word_cors <- SCOTIA_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 30) %>%
+  pairwise_cor(word, section, sort = TRUE)
+
+SCOTIA_word_cors %>%
+  filter(item1 == "access")
+
+
+SCOTIA_word_cors %>%
+  filter(correlation > .8) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+
+```
+
+# rural and led, glace and bay, desmond and viola, classroom, leave and halifaxarea, vet, access and denied
+
+# BMO
+
+```{r}
+BMO_tidy <- tidy(BMO_corpus)
+BMO_section_words <- BMO_tidy %>%
+    mutate(section = row_number() %/% 10) %>%
+  filter(section > 0) %>%
+  unnest_tokens(word, text) %>%
+  filter(!word %in% stop_words$word)
+
+# count common pairs of words co-appearing within the section
+
+BMO_word_pairs <- BMO_section_words %>%
+  pairwise_count(word, section, sort = TRUE)
+
+BMO_word_pairs %>%
+  filter(item1 == "price")
+
+BMO_word_cors <- BMO_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 30) %>%
+  pairwise_cor(word, section, sort = TRUE)
+
+BMO_word_cors %>%
+  filter(item1 == "price")
+
+
+BMO_word_cors %>%
+  filter(correlation > .8) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+
+```
+
+# markets and capital, target and price, leadership, senate and acting, wage, mocks and minimum
+
+# CIBC
+
+```{r}
+CIBC_tidy <- tidy(CIBC_corpus)
+CIBC_section_words <- CIBC_tidy %>%
+    mutate(section = row_number() %/% 10) %>%
+  filter(section > 0) %>%
+  unnest_tokens(word, text) %>%
+  filter(!word %in% stop_words$word)
+
+# count common pairs of words co-appearing within the section
+
+CIBC_word_pairs <- CIBC_section_words %>%
+  pairwise_count(word, section, sort = TRUE)
+
+CIBC_word_pairs %>%
+  filter(item1 == "capital")
+
+CIBC_word_cors <- CIBC_section_words %>%
+  group_by(word) %>%
+  filter(n() >= 30) %>%
+  pairwise_cor(word, section, sort = TRUE)
+
+CIBC_word_cors %>%
+  filter(item1 == "capital")
+
+
+CIBC_word_cors %>%
+  filter(correlation > .8) %>%
+  graph_from_data_frame() %>%
+  ggraph(layout = "fr") +
+  geom_edge_link(aes(edge_alpha = correlation), show.legend = FALSE) +
+  geom_node_point(color = "lightblue", size = 5) +
+  geom_node_text(aes(label = name), repel = TRUE) +
+  theme_void()
+
+```
+
+# price and target, attacks, phishing and brands, gundy and wood, beat, daily, click and isg
