@@ -1,0 +1,1041 @@
+---
+title: "Maximum Entropy"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+
+```
+
+
+
+```{r}
+RBC_tweets_F_tdm <- as.compressed.matrix(RBC_tweets_F_tdm)
+dim(RBC_tweets_F_tdm)
+set.seed(12345)
+
+RBC_tweets_F_train <- RBC_tweets_Full[1:1591, ]
+RBC_tweets_F_test <- RBC_tweets_Full[1592:2271, ]
+
+
+RBC_tweets_F_tdm_train <- RBC_tweets_F_tdm[1:1591, ]
+RBC_tweets_F_tdm_test <- RBC_tweets_F_tdm[1592:2271, ]
+
+dim(RBC_tweets_F_tdm_train)
+dim(RBC_tweets_F_tdm_test)
+
+RBC_model_maxE <- maxent(RBC_tweets_F_tdm_train, RBC_tweets_F_train$sentiment)
+
+
+
+RBC_results_maxE <- predict(RBC_model_maxE, RBC_tweets_F_tdm_test)
+
+RBC_results_maxE <- as.character(RBC_results_maxE[1:680])
+RBC_results_maxE <- as.factor(RBC_results_maxE)
+confusionMatrix(RBC_results_maxE, RBC_tweets_F_test$sentiment)
+
+```
+
+# Cross-validation
+
+```{r}
+
+set.seed(149256)
+
+RBC_tuning.results_maxE <- tune.maxent(RBC_tweets_F_tdm_train, RBC_tweets_F_train$sentiment, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+RBC_tuning.results_maxE
+
+optimal_model <- maxent(RBC_tweets_F_tdm_train, RBC_tweets_F_train$sentiment, l1_regularizer = 0.4, use_sgd = FALSE)
+
+                  
+RBC_pred <- predict(optimal_model, RBC_tweets_F_tdm_test)
+RBC_pred <- RBC_pred[1:680, 1]
+RBC_pred <- as.factor(RBC_pred)
+confusionMatrix(RBC_pred, RBC_tweets_F_test$sentiment)
+
+
+
+```
+
+# ROC and AUC
+
+```{r}
+ roc.curve(RBC_tweets_F_test$sentiment, RBC_pred)
+
+
+```
+
+
+
+
+# downsample
+
+
+```{r}
+set.seed(1)
+RBC_tweets_Full <- RBC_tweets_Full[sample(nrow(RBC_tweets_Full)), ]
+RBC_tweets_Full <- RBC_tweets_Full[sample(nrow(RBC_tweets_Full)), ]
+```
+
+
+```{r}
+RBC_tweets_F_train <- RBC_tweets_Full[1:1591, ]
+RBC_tweets_F_test <- RBC_tweets_Full[1592:2271, ]
+table(RBC_tweets_F_train$sentiment)
+```
+
+
+
+```{r}
+RBC_tweets_F_train_down <- downSample(RBC_tweets_F_train$RBC_tweet, RBC_tweets_F_train$sentiment)
+table(RBC_tweets_F_train_down$Class)
+
+RBC_tweets_F_test_down <- RBC_tweets_F_test
+```
+
+
+
+```{r}
+set.seed(1)
+RBC_tweets_F_train_down <- RBC_tweets_F_train_down[sample(nrow(RBC_tweets_F_train_down)), ]
+RBC_tweets_F_train_down <- RBC_tweets_F_train_down[sample(nrow(RBC_tweets_F_train_down)), ]
+```
+
+```{r}
+RBC_traincorpus_down <- VCorpus(VectorSource(RBC_tweets_F_train_down$x))
+
+RBC_traincorpus_down <- tm_map(RBC_traincorpus_down, removeNumbers)
+RBC_traincorpus_down <- tm_map(RBC_traincorpus_down, removePunctuation)
+RBC_traincorpus_down <- tm_map(RBC_traincorpus_down, content_transformer(tolower))
+RBC_traincorpus_down <- tm_map(RBC_traincorpus_down, removeWords, 
+                           stopwords("english"))
+RBC_traincorpus_down <- tm_map(RBC_traincorpus_down, stripWhitespace)
+
+
+RBC_train_tdm_down <- DocumentTermMatrix(RBC_traincorpus_down)
+dim(RBC_train_tdm_down)
+RBC_train_tdm_down <- removeSparseTerms(RBC_train_tdm_down, 0.99)
+dim(RBC_train_tdm_down)
+RBC_train_tdm_down <- as.compressed.matrix(RBC_train_tdm_down)
+```
+
+
+```{r}
+RBC_testcorpus_down <- VCorpus(VectorSource(RBC_tweets_F_test_down$RBC_tweet))
+
+RBC_testcorpus_down <- tm_map(RBC_testcorpus_down, removeNumbers)
+RBC_testcorpus_down <- tm_map(RBC_testcorpus_down, removePunctuation)
+RBC_testcorpus_down <- tm_map(RBC_testcorpus_down, content_transformer(tolower))
+RBC_testcorpus_down <- tm_map(RBC_testcorpus_down, removeWords, 
+                           stopwords("english"))
+RBC_testcorpus_down <- tm_map(RBC_testcorpus_down, stripWhitespace)
+
+
+RBC_test_tdm_down <- DocumentTermMatrix(RBC_testcorpus_down)
+dim(RBC_test_tdm_down)
+RBC_test_tdm_down <- removeSparseTerms(RBC_test_tdm_down, 0.99)
+dim(RBC_test_tdm_down)
+RBC_test_tdm_down <- as.compressed.matrix(RBC_test_tdm_down)
+```
+
+
+
+```{r}
+
+set.seed(123456)
+
+RBC_model_maxE_down <- maxent(RBC_train_tdm_down, RBC_tweets_F_train_down$Class)
+
+RBC_results_maxE_down <- predict(RBC_model_maxE_down, RBC_test_tdm_down)
+
+RBC_results_maxE_down <- as.character(RBC_results_maxE_down[1:680])
+RBC_results_maxE_down <- as.factor(RBC_results_maxE_down)
+confusionMatrix(RBC_results_maxE_down, RBC_tweets_F_test_down$sentiment)
+
+
+```
+
+# Cross-validation
+
+```{r}
+
+set.seed(149256)
+
+RBC_tuning_maxE_down <- tune.maxent(RBC_train_tdm_down, RBC_tweets_F_train_down$Class, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+RBC_tuning_maxE_down
+RBC_optimal_model_down <- maxent(RBC_train_tdm_down, RBC_tweets_F_train_down$Class, l1_regularizer = 0.6, use_sgd = FALSE)
+
+                  
+RBC_pred_down <- predict(RBC_optimal_model_down, RBC_train_tdm_down)
+RBC_pred_down <- RBC_pred_down[1:680, 1]
+RBC_pred_down <- as.factor(RBC_pred_down)
+confusionMatrix(RBC_pred_down, RBC_tweets_F_test_down$sentiment)
+
+roc.curve(RBC_tweets_F_test_down$sentiment, RBC_pred_down)
+
+```
+
+# upsample
+
+```{r}
+RBC_tweets_F_train_up <- upSample(RBC_tweets_F_train$RBC_tweet, RBC_tweets_F_train$sentiment)
+table(RBC_tweets_F_train_up$Class)
+
+RBC_tweets_F_test_up <- RBC_tweets_F_test
+set.seed(1)
+RBC_tweets_F_train_up <- RBC_tweets_F_train_up[sample(nrow(RBC_tweets_F_train_up)), ]
+RBC_tweets_F_train_up <- RBC_tweets_F_train_up[sample(nrow(RBC_tweets_F_train_up)), ]
+RBC_traincorpus_up <- VCorpus(VectorSource(RBC_tweets_F_train_up$x))
+
+RBC_traincorpus_up <- tm_map(RBC_traincorpus_up, removeNumbers)
+RBC_traincorpus_up <- tm_map(RBC_traincorpus_up, removePunctuation)
+RBC_traincorpus_up <- tm_map(RBC_traincorpus_up, content_transformer(tolower))
+RBC_traincorpus_up <- tm_map(RBC_traincorpus_up, removeWords, 
+                           stopwords("english"))
+RBC_traincorpus_up <- tm_map(RBC_traincorpus_up, stripWhitespace)
+
+
+RBC_train_tdm_up <- DocumentTermMatrix(RBC_traincorpus_up)
+dim(RBC_train_tdm_up)
+RBC_train_tdm_up <- removeSparseTerms(RBC_train_tdm_up, 0.99)
+dim(RBC_train_tdm_up)
+RBC_train_tdm_up <- as.compressed.matrix(RBC_train_tdm_up)
+
+
+RBC_testcorpus_up <- VCorpus(VectorSource(RBC_tweets_F_test_up$RBC_tweet))
+
+RBC_testcorpus_up <- tm_map(RBC_testcorpus_up, removeNumbers)
+RBC_testcorpus_up <- tm_map(RBC_testcorpus_up, removePunctuation)
+RBC_testcorpus_up <- tm_map(RBC_testcorpus_up, content_transformer(tolower))
+RBC_testcorpus_up <- tm_map(RBC_testcorpus_up, removeWords, 
+                           stopwords("english"))
+RBC_testcorpus_up <- tm_map(RBC_testcorpus_up, stripWhitespace)
+
+
+RBC_test_tdm_up <- DocumentTermMatrix(RBC_testcorpus_up)
+dim(RBC_test_tdm_up)
+RBC_test_tdm_up <- removeSparseTerms(RBC_test_tdm_up, 0.99)
+dim(RBC_test_tdm_up)
+RBC_test_tdm_up <- as.compressed.matrix(RBC_test_tdm_up)
+
+set.seed(123456)
+
+RBC_model_maxE_up <- maxent(RBC_train_tdm_up, RBC_tweets_F_train_up$Class)
+
+RBC_results_maxE_up <- predict(RBC_model_maxE_up, RBC_test_tdm_up)
+
+RBC_results_maxE_up <- as.character(RBC_results_maxE_up[1:680])
+RBC_results_maxE_up <- as.factor(RBC_results_maxE_up)
+confusionMatrix(RBC_results_maxE_up, RBC_tweets_F_test_up$sentiment)
+
+set.seed(149256)
+
+RBC_tuning_maxE_up <- tune.maxent(RBC_train_tdm_up, RBC_tweets_F_train_up$Class, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+RBC_tuning_maxE_up
+RBC_optimal_model_up <- maxent(RBC_train_tdm_up, RBC_tweets_F_train_up$Class, l2_regularizer = 0, use_sgd = TRUE)
+
+                  
+RBC_pred_up <- predict(RBC_optimal_model_up, RBC_train_tdm_up)
+RBC_pred_up <- RBC_pred_up[1:680, 1]
+RBC_pred_up <- as.factor(RBC_pred_up)
+confusionMatrix(RBC_pred_up, RBC_tweets_F_test_up$sentiment)
+
+roc.curve(RBC_tweets_F_test_up$sentiment, RBC_pred_up)
+
+
+```
+
+
+# TD
+
+```{r}
+TD_tweets_F_tdm <- as.compressed.matrix(TD_tweets_F_tdm)
+dim(TD_tweets_F_tdm)
+set.seed(12345)
+TD_tweets_F_train <- TD_tweets_Full[1:1926, ]
+TD_tweets_F_test <- TD_tweets_Full[1927:2751, ]
+
+TD_tweets_F_tdm_train <- TD_tweets_F_tdm[1:1926, ]
+TD_tweets_F_tdm_test <- TD_tweets_F_tdm[1927:2751, ]
+
+TD_model_maxE <- maxent(TD_tweets_F_tdm_train, TD_tweets_F_train$sentiment)
+
+TD_results_maxE <- predict(TD_model_maxE, TD_tweets_F_tdm_test)
+
+TD_results_maxE <- as.character(TD_results_maxE[1:825])
+TD_results_maxE <- as.factor(TD_results_maxE)
+confusionMatrix(TD_results_maxE, TD_tweets_F_test$sentiment)
+
+```
+
+# Cross-validation
+
+```{r}
+
+set.seed(149256)
+TD_tuning.results_maxE <- tune.maxent(TD_tweets_F_tdm_train, TD_tweets_F_train$sentiment, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+TD_tuning.results_maxE
+
+TD_optimal_model <- maxent(TD_tweets_F_tdm_train, TD_tweets_F_train$sentiment, l2_regularizer = 0.6, use_sgd = FALSE)
+
+                  
+TD_pred <- predict(TD_optimal_model, TD_tweets_F_tdm_test)
+TD_pred <- TD_pred[1:825, 1]
+TD_pred <- as.factor(TD_pred)
+confusionMatrix(TD_pred, TD_tweets_F_test$sentiment)
+```
+
+
+```{r}
+
+  roc.curve(TD_tweets_F_test$sentiment, TD_pred)
+
+```
+
+# downsample
+
+```{r}
+
+
+
+TD_tweets_F_train_down <- downSample(TD_tweets_F_train$TD_tweet, TD_tweets_F_train$sentiment)
+table(TD_tweets_F_train_down$Class)
+
+TD_tweets_F_test_down <- TD_tweets_F_test
+
+set.seed(1)
+TD_tweets_F_train_down <- TD_tweets_F_train_down[sample(nrow(TD_tweets_F_train_down)), ]
+TD_tweets_F_train_down <- TD_tweets_F_train_down[sample(nrow(TD_tweets_F_train_down)), ]
+
+TD_traincorpus_down <- VCorpus(VectorSource(TD_tweets_F_train_down$x))
+
+TD_traincorpus_down <- tm_map(TD_traincorpus_down, removeNumbers)
+TD_traincorpus_down <- tm_map(TD_traincorpus_down, removePunctuation)
+TD_traincorpus_down <- tm_map(TD_traincorpus_down, content_transformer(tolower))
+TD_traincorpus_down <- tm_map(TD_traincorpus_down, removeWords, 
+                           stopwords("english"))
+TD_traincorpus_down <- tm_map(TD_traincorpus_down, stripWhitespace)
+
+
+TD_train_tdm_down <- DocumentTermMatrix(TD_traincorpus_down)
+dim(TD_train_tdm_down)
+TD_train_tdm_down <- removeSparseTerms(TD_train_tdm_down, 0.99)
+dim(TD_train_tdm_down)
+TD_train_tdm_down <- as.compressed.matrix(TD_train_tdm_down)
+
+TD_testcorpus_down <- VCorpus(VectorSource(TD_tweets_F_test_down$TD_tweet))
+
+TD_testcorpus_down <- tm_map(TD_testcorpus_down, removeNumbers)
+TD_testcorpus_down <- tm_map(TD_testcorpus_down, removePunctuation)
+TD_testcorpus_down <- tm_map(TD_testcorpus_down, content_transformer(tolower))
+TD_testcorpus_down <- tm_map(TD_testcorpus_down, removeWords, 
+                           stopwords("english"))
+TD_testcorpus_down <- tm_map(TD_testcorpus_down, stripWhitespace)
+
+
+TD_test_tdm_down <- DocumentTermMatrix(TD_testcorpus_down)
+dim(TD_test_tdm_down)
+TD_test_tdm_down <- removeSparseTerms(TD_test_tdm_down, 0.99)
+dim(TD_test_tdm_down)
+TD_test_tdm_down <- as.compressed.matrix(TD_test_tdm_down)
+
+set.seed(123456)
+
+TD_model_maxE_down <- maxent(TD_train_tdm_down, TD_tweets_F_train_down$Class)
+
+TD_results_maxE_down <- predict(TD_model_maxE_down, TD_test_tdm_down)
+
+TD_results_maxE_down <- as.character(TD_results_maxE_down[1:825])
+TD_results_maxE_down <- as.factor(TD_results_maxE_down)
+confusionMatrix(TD_results_maxE_down, TD_tweets_F_test_down$sentiment)
+
+
+
+set.seed(149256)
+
+TD_tuning.results_maxE <- tune.maxent(TD_train_tdm_down, TD_tweets_F_train_down$Class, nfold = 10, showall = TRUE, verbose = TRUE) 
+TD_tuning.results_maxE
+optimal_model <- maxent(TD_train_tdm_down, TD_tweets_F_train_down$Class, l2_regularizer = 0.2, use_sgd = FALSE)
+                 
+TD_pred <- predict(optimal_model, TD_train_tdm_down)
+TD_pred <- TD_pred[1:825, 1]
+TD_pred <- as.factor(TD_pred)
+confusionMatrix(TD_pred, TD_tweets_F_test_down$sentiment)
+
+roc.curve(TD_tweets_F_test_down$sentiment, TD_pred)
+
+
+```
+
+# upsample
+
+```{r}
+
+
+TD_tweets_F_train_up <- upSample(TD_tweets_F_train$TD_tweet, TD_tweets_F_train$sentiment)
+table(TD_tweets_F_train_up$Class)
+
+TD_tweets_F_test_up <- TD_tweets_F_test
+
+set.seed(1)
+TD_tweets_F_train_up <- TD_tweets_F_train_up[sample(nrow(TD_tweets_F_train_up)), ]
+TD_tweets_F_train_up <- TD_tweets_F_train_up[sample(nrow(TD_tweets_F_train_up)), ]
+
+TD_traincorpus_up <- VCorpus(VectorSource(TD_tweets_F_train_up$x))
+
+TD_traincorpus_up <- tm_map(TD_traincorpus_up, removeNumbers)
+TD_traincorpus_up <- tm_map(TD_traincorpus_up, removePunctuation)
+TD_traincorpus_up <- tm_map(TD_traincorpus_up, content_transformer(tolower))
+TD_traincorpus_up <- tm_map(TD_traincorpus_up, removeWords, 
+                           stopwords("english"))
+TD_traincorpus_up <- tm_map(TD_traincorpus_up, stripWhitespace)
+
+
+TD_train_tdm_up <- DocumentTermMatrix(TD_traincorpus_up)
+dim(TD_train_tdm_up)
+TD_train_tdm_up <- removeSparseTerms(TD_train_tdm_up, 0.99)
+dim(TD_train_tdm_up)
+TD_train_tdm_up <- as.compressed.matrix(TD_train_tdm_up)
+
+TD_testcorpus_up <- VCorpus(VectorSource(TD_tweets_F_test_up$TD_tweet))
+
+TD_testcorpus_up <- tm_map(TD_testcorpus_up, removeNumbers)
+TD_testcorpus_up <- tm_map(TD_testcorpus_up, removePunctuation)
+TD_testcorpus_up <- tm_map(TD_testcorpus_up, content_transformer(tolower))
+TD_testcorpus_up <- tm_map(TD_testcorpus_up, removeWords, 
+                           stopwords("english"))
+TD_testcorpus_up <- tm_map(TD_testcorpus_up, stripWhitespace)
+
+
+TD_test_tdm_up <- DocumentTermMatrix(TD_testcorpus_up)
+dim(TD_test_tdm_up)
+TD_test_tdm_up <- removeSparseTerms(TD_test_tdm_up, 0.99)
+dim(TD_test_tdm_up)
+TD_test_tdm_up <- as.compressed.matrix(TD_test_tdm_up)
+
+set.seed(123456)
+
+TD_model_maxE_up <- maxent(TD_train_tdm_up, TD_tweets_F_train_up$Class)
+
+TD_results_maxE_up <- predict(TD_model_maxE_up, TD_test_tdm_up)
+
+TD_results_maxE_up <- as.character(TD_results_maxE_up[1:825])
+TD_results_maxE_up <- as.factor(TD_results_maxE_up)
+confusionMatrix(TD_results_maxE_up, TD_tweets_F_test_up$sentiment)
+
+
+
+set.seed(149256)
+
+TD_tuning.results_maxE <- tune.maxent(TD_train_tdm_up, TD_tweets_F_train_up$Class, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+
+TD_tuning.results_maxE
+
+optimal_model <- maxent(TD_train_tdm_up, TD_tweets_F_train_up$Class, l1_regularizer = 0.8, use_sgd = FALSE)
+                 
+TD_pred <- predict(optimal_model, TD_train_tdm_up)
+TD_pred <- TD_pred[1:825, 1]
+TD_pred <- as.factor(TD_pred)
+confusionMatrix(TD_pred, TD_tweets_F_test_up$sentiment)
+
+roc.curve(TD_tweets_F_test_up$sentiment, TD_pred)
+
+```
+
+
+# SCOTIA
+
+```{r}
+SCOTIA_tweets_F_tdm <- as.compressed.matrix(SCOTIA_tweets_F_tdm)
+dim(SCOTIA_tweets_F_tdm)
+set.seed(12345)
+SCOTIA_tweets_F_train <- SCOTIA_tweets_Full[1:1041, ]
+SCOTIA_tweets_F_test <- SCOTIA_tweets_Full[1042:1486, ]
+
+SCOTIA_tweets_F_tdm_train <- SCOTIA_tweets_F_tdm[1:1041, ]
+SCOTIA_tweets_F_tdm_test <- SCOTIA_tweets_F_tdm[1042:1486, ]
+
+SCOTIA_model_maxE <- maxent(SCOTIA_tweets_F_tdm_train, SCOTIA_tweets_F_train$sentiment)
+
+SCOTIA_results_maxE <- predict(SCOTIA_model_maxE, SCOTIA_tweets_F_tdm_test)
+
+SCOTIA_results_maxE <- as.character(SCOTIA_results_maxE[1:445])
+SCOTIA_results_maxE <- as.factor(SCOTIA_results_maxE)
+confusionMatrix(SCOTIA_results_maxE, SCOTIA_tweets_F_test$sentiment)
+
+```
+
+
+
+```{r}
+
+set.seed(149256)
+
+SCOTIA_tuning.results_maxE <- tune.maxent(SCOTIA_tweets_F_tdm_train, SCOTIA_tweets_F_train$sentiment, nfold = 10, showall = TRUE, verbose = TRUE) 
+SCOTIA_tuning.results_maxE
+
+SCOTIA_optimal_model <- maxent(SCOTIA_tweets_F_tdm_train, SCOTIA_tweets_F_train$sentiment, l2_regularizer = 0.8, use_sgd = FALSE)
+
+                  
+SCOTIA_pred <- predict(SCOTIA_optimal_model, SCOTIA_tweets_F_tdm_test)
+SCOTIA_pred <- SCOTIA_pred[1:445, 1]
+SCOTIA_pred <- as.factor(SCOTIA_pred)
+confusionMatrix(SCOTIA_pred, SCOTIA_tweets_F_test$sentiment)
+
+
+ roc.curve(SCOTIA_tweets_F_test$sentiment, SCOTIA_pred)
+
+                   
+
+```
+
+# downsample
+
+```{r}
+
+SCOTIA_tweets_F_train_down <- downSample(SCOTIA_tweets_F_train$SCOTIA_tweet, SCOTIA_tweets_F_train$sentiment)
+table(SCOTIA_tweets_F_train_down$Class)
+
+SCOTIA_tweets_F_test_down <- SCOTIA_tweets_F_test
+set.seed(1)
+SCOTIA_tweets_F_train_down <- SCOTIA_tweets_F_train_down[sample(nrow(SCOTIA_tweets_F_train_down)), ]
+SCOTIA_tweets_F_train_down <- SCOTIA_tweets_F_train_down[sample(nrow(SCOTIA_tweets_F_train_down)), ]
+
+SCOTIA_traincorpus_down <- VCorpus(VectorSource(SCOTIA_tweets_F_train_down$x))
+
+SCOTIA_traincorpus_down <- tm_map(SCOTIA_traincorpus_down, removeNumbers)
+SCOTIA_traincorpus_down <- tm_map(SCOTIA_traincorpus_down, removePunctuation)
+SCOTIA_traincorpus_down <- tm_map(SCOTIA_traincorpus_down, content_transformer(tolower))
+SCOTIA_traincorpus_down <- tm_map(SCOTIA_traincorpus_down, removeWords, 
+                           stopwords("english"))
+SCOTIA_traincorpus_down <- tm_map(SCOTIA_traincorpus_down, stripWhitespace)
+
+
+SCOTIA_train_tdm_down <- DocumentTermMatrix(SCOTIA_traincorpus_down)
+dim(SCOTIA_train_tdm_down)
+SCOTIA_train_tdm_down <- removeSparseTerms(SCOTIA_train_tdm_down, 0.99)
+dim(SCOTIA_train_tdm_down)
+SCOTIA_train_tdm_down <- as.compressed.matrix(SCOTIA_train_tdm_down)
+
+SCOTIA_testcorpus_down <- VCorpus(VectorSource(SCOTIA_tweets_F_test_down$SCOTIA_tweet))
+
+SCOTIA_testcorpus_down <- tm_map(SCOTIA_testcorpus_down, removeNumbers)
+SCOTIA_testcorpus_down <- tm_map(SCOTIA_testcorpus_down, removePunctuation)
+SCOTIA_testcorpus_down <- tm_map(SCOTIA_testcorpus_down, content_transformer(tolower))
+SCOTIA_testcorpus_down <- tm_map(SCOTIA_testcorpus_down, removeWords, 
+                           stopwords("english"))
+SCOTIA_testcorpus_down <- tm_map(SCOTIA_testcorpus_down, stripWhitespace)
+
+
+SCOTIA_test_tdm_down <- DocumentTermMatrix(SCOTIA_testcorpus_down)
+dim(SCOTIA_test_tdm_down)
+SCOTIA_test_tdm_down <- removeSparseTerms(SCOTIA_test_tdm_down, 0.99)
+dim(SCOTIA_test_tdm_down)
+SCOTIA_test_tdm_down <- as.compressed.matrix(SCOTIA_test_tdm_down)
+
+set.seed(123456)
+
+SCOTIA_model_maxE_down <- maxent(SCOTIA_train_tdm_down, SCOTIA_tweets_F_train_down$Class)
+
+SCOTIA_results_maxE_down <- predict(SCOTIA_model_maxE_down, SCOTIA_test_tdm_down)
+
+SCOTIA_results_maxE_down <- as.character(SCOTIA_results_maxE_down[1:445])
+SCOTIA_results_maxE_down <- as.factor(SCOTIA_results_maxE_down)
+confusionMatrix(SCOTIA_results_maxE_down, SCOTIA_tweets_F_test_down$sentiment)
+
+
+
+set.seed(149256)
+
+SCOTIA_tuning.results_maxE <- tune.maxent(SCOTIA_train_tdm_down, SCOTIA_tweets_F_train_down$Class, nfold = 10, showall = TRUE, verbose = TRUE) 
+SCOTIA_tuning.results_maxE
+
+optimal_model <- maxent(SCOTIA_train_tdm_down, SCOTIA_tweets_F_train_down$Class, l1_regularizer = 0.4, use_sgd = FALSE)
+                 
+SCOTIA_pred <- predict(optimal_model, SCOTIA_train_tdm_down)
+SCOTIA_pred <- SCOTIA_pred[1:445, 1]
+SCOTIA_pred <- as.factor(SCOTIA_pred)
+confusionMatrix(SCOTIA_pred, SCOTIA_tweets_F_test_down$sentiment)
+
+roc.curve(SCOTIA_tweets_F_test_down$sentiment, SCOTIA_pred)
+
+
+```
+
+# upsample
+
+```{r}
+
+SCOTIA_tweets_F_train_up <- upSample(SCOTIA_tweets_F_train$SCOTIA_tweet, SCOTIA_tweets_F_train$sentiment)
+table(SCOTIA_tweets_F_train_up$Class)
+
+SCOTIA_tweets_F_test_up <- SCOTIA_tweets_F_test
+set.seed(1)
+SCOTIA_tweets_F_train_up <- SCOTIA_tweets_F_train_up[sample(nrow(SCOTIA_tweets_F_train_up)), ]
+SCOTIA_tweets_F_train_up <- SCOTIA_tweets_F_train_up[sample(nrow(SCOTIA_tweets_F_train_up)), ]
+
+SCOTIA_traincorpus_up <- VCorpus(VectorSource(SCOTIA_tweets_F_train_up$x))
+
+SCOTIA_traincorpus_up <- tm_map(SCOTIA_traincorpus_up, removeNumbers)
+SCOTIA_traincorpus_up <- tm_map(SCOTIA_traincorpus_up, removePunctuation)
+SCOTIA_traincorpus_up <- tm_map(SCOTIA_traincorpus_up, content_transformer(tolower))
+SCOTIA_traincorpus_up <- tm_map(SCOTIA_traincorpus_up, removeWords, 
+                           stopwords("english"))
+SCOTIA_traincorpus_up <- tm_map(SCOTIA_traincorpus_up, stripWhitespace)
+
+
+SCOTIA_train_tdm_up <- DocumentTermMatrix(SCOTIA_traincorpus_up)
+dim(SCOTIA_train_tdm_up)
+SCOTIA_train_tdm_up <- removeSparseTerms(SCOTIA_train_tdm_up, 0.99)
+dim(SCOTIA_train_tdm_up)
+SCOTIA_train_tdm_up <- as.compressed.matrix(SCOTIA_train_tdm_up)
+
+SCOTIA_testcorpus_up <- VCorpus(VectorSource(SCOTIA_tweets_F_test_up$SCOTIA_tweet))
+
+SCOTIA_testcorpus_up <- tm_map(SCOTIA_testcorpus_up, removeNumbers)
+SCOTIA_testcorpus_up <- tm_map(SCOTIA_testcorpus_up, removePunctuation)
+SCOTIA_testcorpus_up <- tm_map(SCOTIA_testcorpus_up, content_transformer(tolower))
+SCOTIA_testcorpus_up <- tm_map(SCOTIA_testcorpus_up, removeWords, 
+                           stopwords("english"))
+SCOTIA_testcorpus_up <- tm_map(SCOTIA_testcorpus_up, stripWhitespace)
+
+
+SCOTIA_test_tdm_up <- DocumentTermMatrix(SCOTIA_testcorpus_up)
+dim(SCOTIA_test_tdm_up)
+SCOTIA_test_tdm_up <- removeSparseTerms(SCOTIA_test_tdm_up, 0.99)
+dim(SCOTIA_test_tdm_up)
+SCOTIA_test_tdm_up <- as.compressed.matrix(SCOTIA_test_tdm_up)
+
+set.seed(123456)
+
+SCOTIA_model_maxE_up <- maxent(SCOTIA_train_tdm_up, SCOTIA_tweets_F_train_up$Class)
+
+SCOTIA_results_maxE_up <- predict(SCOTIA_model_maxE_up, SCOTIA_test_tdm_up)
+
+SCOTIA_results_maxE_up <- as.character(SCOTIA_results_maxE_up[1:445])
+SCOTIA_results_maxE_up <- as.factor(SCOTIA_results_maxE_up)
+confusionMatrix(SCOTIA_results_maxE_up, SCOTIA_tweets_F_test_up$sentiment)
+
+
+
+set.seed(149256)
+
+SCOTIA_tuning.results_maxE <- tune.maxent(SCOTIA_train_tdm_up, SCOTIA_tweets_F_train_up$Class, nfold = 10, showall = TRUE, verbose = TRUE) 
+SCOTIA_tuning.results_maxE
+
+optimal_model <- maxent(SCOTIA_train_tdm_up, SCOTIA_tweets_F_train_up$Class, l1_regularizer = 0.8, use_sgd = FALSE)
+                 
+SCOTIA_pred <- predict(optimal_model, SCOTIA_train_tdm_up)
+SCOTIA_pred <- SCOTIA_pred[1:445, 1]
+SCOTIA_pred <- as.factor(SCOTIA_pred)
+confusionMatrix(SCOTIA_pred, SCOTIA_tweets_F_test_up$sentiment)
+
+roc.curve(SCOTIA_tweets_F_test_up$sentiment, SCOTIA_pred)
+
+```
+
+
+# BMO
+
+```{r}
+BMO_tweets_F_tdm <- as.compressed.matrix(BMO_tweets_F_tdm)
+dim(BMO_tweets_F_tdm)
+set.seed(12345)
+BMO_tweets_F_train <- BMO_tweets_Full[1:1585, ]
+BMO_tweets_F_test <- BMO_tweets_Full[1586:2263, ]
+
+BMO_tweets_F_tdm_train <- BMO_tweets_F_tdm[1:1585, ]
+BMO_tweets_F_tdm_test <- BMO_tweets_F_tdm[1586:2263, ]
+
+BMO_model_maxE <- maxent(BMO_tweets_F_tdm_train, BMO_tweets_F_train$sentiment)
+
+BMO_results_maxE <- predict(BMO_model_maxE, BMO_tweets_F_tdm_test)
+
+BMO_results_maxE <- as.character(BMO_results_maxE[1:678])
+BMO_results_maxE <- as.factor(BMO_results_maxE)
+confusionMatrix(BMO_results_maxE, BMO_tweets_F_test$sentiment)
+
+```
+
+
+
+
+```{r}
+
+set.seed(149256)
+
+BMO_tuning.results_maxE <- tune.maxent(BMO_tweets_F_tdm_train, BMO_tweets_F_train$sentiment, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+BMO_tuning.results_maxE
+BMO_optimal_model <- maxent(BMO_tweets_F_tdm_train, BMO_tweets_F_train$sentiment, l2_regularizer = 1.0, use_sgd = FALSE)
+
+                  
+BMO_pred <- predict(BMO_optimal_model, BMO_tweets_F_tdm_test)
+BMO_pred <- BMO_pred[1:678, 1]
+BMO_pred <- as.factor(BMO_pred)
+confusionMatrix(BMO_pred, BMO_tweets_F_test$sentiment)
+
+ roc.curve(BMO_tweets_F_test$sentiment, BMO_pred)
+
+
+                     
+```
+
+
+# downsample
+
+
+```{r}
+
+
+BMO_tweets_F_train_down <- downSample(BMO_tweets_F_train$BMO_tweet, BMO_tweets_F_train$sentiment)
+table(BMO_tweets_F_train_down$Class)
+
+BMO_tweets_F_test_down <- BMO_tweets_F_test
+
+set.seed(1)
+BMO_tweets_F_train_down <- BMO_tweets_F_train_down[sample(nrow(BMO_tweets_F_train_down)), ]
+BMO_tweets_F_train_down <- BMO_tweets_F_train_down[sample(nrow(BMO_tweets_F_train_down)), ]
+
+BMO_traincorpus_down <- VCorpus(VectorSource(BMO_tweets_F_train_down$x))
+
+BMO_traincorpus_down <- tm_map(BMO_traincorpus_down, removeNumbers)
+BMO_traincorpus_down <- tm_map(BMO_traincorpus_down, removePunctuation)
+BMO_traincorpus_down <- tm_map(BMO_traincorpus_down, content_transformer(tolower))
+BMO_traincorpus_down <- tm_map(BMO_traincorpus_down, removeWords, 
+                           stopwords("english"))
+BMO_traincorpus_down <- tm_map(BMO_traincorpus_down, stripWhitespace)
+
+
+BMO_train_tdm_down <- DocumentTermMatrix(BMO_traincorpus_down)
+dim(BMO_train_tdm_down)
+BMO_train_tdm_down <- removeSparseTerms(BMO_train_tdm_down, 0.99)
+dim(BMO_train_tdm_down)
+BMO_train_tdm_down <- as.compressed.matrix(BMO_train_tdm_down)
+
+
+
+BMO_testcorpus_down <- VCorpus(VectorSource(BMO_tweets_F_test_down$BMO_tweet))
+
+BMO_testcorpus_down <- tm_map(BMO_testcorpus_down, removeNumbers)
+BMO_testcorpus_down <- tm_map(BMO_testcorpus_down, removePunctuation)
+BMO_testcorpus_down <- tm_map(BMO_testcorpus_down, content_transformer(tolower))
+BMO_testcorpus_down <- tm_map(BMO_testcorpus_down, removeWords, 
+                           stopwords("english"))
+BMO_testcorpus_down <- tm_map(BMO_testcorpus_down, stripWhitespace)
+
+
+BMO_test_tdm_down <- DocumentTermMatrix(BMO_testcorpus_down)
+dim(BMO_test_tdm_down)
+BMO_test_tdm_down <- removeSparseTerms(BMO_test_tdm_down, 0.99)
+dim(BMO_test_tdm_down)
+BMO_test_tdm_down <- as.compressed.matrix(BMO_test_tdm_down)
+
+set.seed(123456)
+
+BMO_model_maxE_down <- maxent(BMO_train_tdm_down, BMO_tweets_F_train_down$Class)
+
+BMO_results_maxE_down <- predict(BMO_model_maxE_down, BMO_test_tdm_down)
+
+BMO_results_maxE_down <- as.character(BMO_results_maxE_down[1:678])
+BMO_results_maxE_down <- as.factor(BMO_results_maxE_down)
+confusionMatrix(BMO_results_maxE_down, BMO_tweets_F_test_down$sentiment)
+
+
+
+set.seed(149256)
+
+BMO_tuning.results_maxE <- tune.maxent(BMO_train_tdm_down, BMO_tweets_F_train_down$Class, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+BMO_tuning.results_maxE
+optimal_model <- maxent(BMO_train_tdm_down, BMO_tweets_F_train_down$Class, l1_regularizer = 0.2, use_sgd = FALSE)
+                 
+BMO_pred <- predict(optimal_model, BMO_train_tdm_down)
+BMO_pred <- BMO_pred[1:678, 1]
+BMO_pred <- as.factor(BMO_pred)
+confusionMatrix(BMO_pred, BMO_tweets_F_test_down$sentiment)
+
+roc.curve(BMO_tweets_F_test_down$sentiment, BMO_pred)
+
+
+```
+
+# upsample
+
+```{r}
+BMO_tweets_F_train_up <- upSample(BMO_tweets_F_train$BMO_tweet, BMO_tweets_F_train$sentiment)
+table(BMO_tweets_F_train_up$Class)
+
+BMO_tweets_F_test_up <- BMO_tweets_F_test
+
+set.seed(1)
+BMO_tweets_F_train_up <- BMO_tweets_F_train_up[sample(nrow(BMO_tweets_F_train_up)), ]
+BMO_tweets_F_train_up <- BMO_tweets_F_train_up[sample(nrow(BMO_tweets_F_train_up)), ]
+
+BMO_traincorpus_up <- VCorpus(VectorSource(BMO_tweets_F_train_up$x))
+
+BMO_traincorpus_up <- tm_map(BMO_traincorpus_up, removeNumbers)
+BMO_traincorpus_up <- tm_map(BMO_traincorpus_up, removePunctuation)
+BMO_traincorpus_up <- tm_map(BMO_traincorpus_up, content_transformer(tolower))
+BMO_traincorpus_up <- tm_map(BMO_traincorpus_up, removeWords, 
+                           stopwords("english"))
+BMO_traincorpus_up <- tm_map(BMO_traincorpus_up, stripWhitespace)
+
+
+BMO_train_tdm_up <- DocumentTermMatrix(BMO_traincorpus_up)
+dim(BMO_train_tdm_up)
+BMO_train_tdm_up <- removeSparseTerms(BMO_train_tdm_up, 0.99)
+dim(BMO_train_tdm_up)
+BMO_train_tdm_up <- as.compressed.matrix(BMO_train_tdm_up)
+
+BMO_testcorpus_up <- VCorpus(VectorSource(BMO_tweets_F_test_up$BMO_tweet))
+
+BMO_testcorpus_up <- tm_map(BMO_testcorpus_up, removeNumbers)
+BMO_testcorpus_up <- tm_map(BMO_testcorpus_up, removePunctuation)
+BMO_testcorpus_up <- tm_map(BMO_testcorpus_up, content_transformer(tolower))
+BMO_testcorpus_up <- tm_map(BMO_testcorpus_up, removeWords, 
+                           stopwords("english"))
+BMO_testcorpus_up <- tm_map(BMO_testcorpus_up, stripWhitespace)
+
+
+BMO_test_tdm_up <- DocumentTermMatrix(BMO_testcorpus_up)
+dim(BMO_test_tdm_up)
+BMO_test_tdm_up <- removeSparseTerms(BMO_test_tdm_up, 0.99)
+dim(BMO_test_tdm_up)
+BMO_test_tdm_up <- as.compressed.matrix(BMO_test_tdm_up)
+
+
+set.seed(123456)
+
+BMO_model_maxE_up <- maxent(BMO_train_tdm_up, BMO_tweets_F_train_up$Class)
+
+BMO_results_maxE_up <- predict(BMO_model_maxE_up, BMO_test_tdm_up)
+
+BMO_results_maxE_up <- as.character(BMO_results_maxE_up[1:678])
+BMO_results_maxE_up <- as.factor(BMO_results_maxE_up)
+confusionMatrix(BMO_results_maxE_up, BMO_tweets_F_test_up$sentiment)
+
+
+
+set.seed(149256)
+
+BMO_tuning.results_maxE <- tune.maxent(BMO_train_tdm_up, BMO_tweets_F_train_up$Class, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+BMO_tuning.results_maxE
+optimal_model <- maxent(BMO_train_tdm_up, BMO_tweets_F_train_up$Class, l2_regularizer = 0.2, use_sgd = FALSE)
+                 
+BMO_pred <- predict(optimal_model, BMO_train_tdm_up)
+BMO_pred <- BMO_pred[1:678, 1]
+BMO_pred <- as.factor(BMO_pred)
+confusionMatrix(BMO_pred, BMO_tweets_F_test_up$sentiment)
+
+roc.curve(BMO_tweets_F_test_up$sentiment, BMO_pred)
+
+
+```
+
+
+# CIBC
+
+```{r}
+CIBC_tweets_F_tdm <- as.compressed.matrix(CIBC_tweets_F_tdm)
+dim(CIBC_tweets_F_tdm)
+set.seed(12345)
+CIBC_tweets_F_train <- CIBC_tweets_Full[1:950, ]
+CIBC_tweets_F_test <- CIBC_tweets_Full[951:1357, ]
+
+CIBC_tweets_F_tdm_train <- CIBC_tweets_F_tdm[1:950, ]
+CIBC_tweets_F_tdm_test <- CIBC_tweets_F_tdm[951:1357, ]
+
+CIBC_model_maxE <- maxent(CIBC_tweets_F_tdm_train, CIBC_tweets_F_train$sentiment)
+
+CIBC_results_maxE <- predict(CIBC_model_maxE, CIBC_tweets_F_tdm_test)
+
+CIBC_results_maxE <- as.character(CIBC_results_maxE[1:407])
+CIBC_results_maxE <- as.factor(CIBC_results_maxE)
+confusionMatrix(CIBC_results_maxE, CIBC_tweets_F_test$sentiment)
+
+```
+
+
+
+```{r}
+
+set.seed(149256)
+
+CIBC_tuning.results_maxE <- tune.maxent(CIBC_tweets_F_tdm_train, CIBC_tweets_F_train$sentiment, nfold = 10, showall = TRUE, verbose = TRUE) 
+CIBC_tuning.results_maxE
+
+CIBC_optimal_model <- maxent(CIBC_tweets_F_tdm_train, CIBC_tweets_F_train$sentiment, l1_regularizer = 1.0, use_sgd = FALSE)
+
+                  
+CIBC_pred <- predict(CIBC_optimal_model, CIBC_tweets_F_tdm_test)
+CIBC_pred <- CIBC_pred[1:407, 1]
+CIBC_pred <- as.factor(CIBC_pred)
+confusionMatrix(CIBC_pred, CIBC_tweets_F_test$sentiment)
+
+ roc.curve(CIBC_tweets_F_test$sentiment, CIBC_pred)
+
+
+```
+
+# downsample
+
+```{r}
+
+CIBC_tweets_F_train_down <- downSample(CIBC_tweets_F_train$CIBC_tweet, CIBC_tweets_F_train$sentiment)
+table(CIBC_tweets_F_train_down$Class)
+
+CIBC_tweets_F_test_down <- CIBC_tweets_F_test
+
+set.seed(1)
+CIBC_tweets_F_train_down <- CIBC_tweets_F_train_down[sample(nrow(CIBC_tweets_F_train_down)), ]
+CIBC_tweets_F_train_down <- CIBC_tweets_F_train_down[sample(nrow(CIBC_tweets_F_train_down)), ]
+
+CIBC_traincorpus_down <- VCorpus(VectorSource(CIBC_tweets_F_train_down$x))
+
+CIBC_traincorpus_down <- tm_map(CIBC_traincorpus_down, removeNumbers)
+CIBC_traincorpus_down <- tm_map(CIBC_traincorpus_down, removePunctuation)
+CIBC_traincorpus_down <- tm_map(CIBC_traincorpus_down, content_transformer(tolower))
+CIBC_traincorpus_down <- tm_map(CIBC_traincorpus_down, removeWords, 
+                           stopwords("english"))
+CIBC_traincorpus_down <- tm_map(CIBC_traincorpus_down, stripWhitespace)
+
+
+CIBC_train_tdm_down <- DocumentTermMatrix(CIBC_traincorpus_down)
+dim(CIBC_train_tdm_down)
+CIBC_train_tdm_down <- removeSparseTerms(CIBC_train_tdm_down, 0.99)
+dim(CIBC_train_tdm_down)
+CIBC_train_tdm_down <- as.compressed.matrix(CIBC_train_tdm_down)
+
+CIBC_testcorpus_down <- VCorpus(VectorSource(CIBC_tweets_F_test_down$CIBC_tweet))
+
+CIBC_testcorpus_down <- tm_map(CIBC_testcorpus_down, removeNumbers)
+CIBC_testcorpus_down <- tm_map(CIBC_testcorpus_down, removePunctuation)
+CIBC_testcorpus_down <- tm_map(CIBC_testcorpus_down, content_transformer(tolower))
+CIBC_testcorpus_down <- tm_map(CIBC_testcorpus_down, removeWords, 
+                           stopwords("english"))
+CIBC_testcorpus_down <- tm_map(CIBC_testcorpus_down, stripWhitespace)
+
+
+CIBC_test_tdm_down <- DocumentTermMatrix(CIBC_testcorpus_down)
+dim(CIBC_test_tdm_down)
+CIBC_test_tdm_down <- removeSparseTerms(CIBC_test_tdm_down, 0.99)
+dim(CIBC_test_tdm_down)
+CIBC_test_tdm_down <- as.compressed.matrix(CIBC_test_tdm_down)
+
+set.seed(123456)
+
+CIBC_model_maxE_down <- maxent(CIBC_train_tdm_down, CIBC_tweets_F_train_down$Class)
+
+CIBC_results_maxE_down <- predict(CIBC_model_maxE_down, CIBC_test_tdm_down)
+
+CIBC_results_maxE_down <- as.character(CIBC_results_maxE_down[1:407])
+CIBC_results_maxE_down <- as.factor(CIBC_results_maxE_down)
+confusionMatrix(CIBC_results_maxE_down, CIBC_tweets_F_test_down$sentiment)
+
+
+
+set.seed(149256)
+
+CIBC_tuning.results_maxE <- tune.maxent(CIBC_train_tdm_down, CIBC_tweets_F_train_down$Class, nfold = 10, showall = TRUE, verbose = TRUE) 
+CIBC_tuning.results_maxE
+optimal_model <- maxent(CIBC_train_tdm_down, CIBC_tweets_F_train_down$Class, l1_regularizer = 0.6, use_sgd = FALSE)
+                 
+CIBC_pred <- predict(optimal_model, CIBC_train_tdm_down)
+CIBC_pred <- CIBC_pred[1:407, 1]
+CIBC_pred <- as.factor(CIBC_pred)
+confusionMatrix(CIBC_pred, CIBC_tweets_F_test_down$sentiment)
+
+roc.curve(CIBC_tweets_F_test_down$sentiment, CIBC_pred)
+
+
+```
+
+# upsample
+
+```{r}
+
+CIBC_tweets_F_train_up <- upSample(CIBC_tweets_F_train$CIBC_tweet, CIBC_tweets_F_train$sentiment)
+table(CIBC_tweets_F_train_up$Class)
+
+CIBC_tweets_F_test_up <- CIBC_tweets_F_test
+
+set.seed(1)
+CIBC_tweets_F_train_up <- CIBC_tweets_F_train_up[sample(nrow(CIBC_tweets_F_train_up)), ]
+CIBC_tweets_F_train_up <- CIBC_tweets_F_train_up[sample(nrow(CIBC_tweets_F_train_up)), ]
+
+CIBC_traincorpus_up <- VCorpus(VectorSource(CIBC_tweets_F_train_up$x))
+
+CIBC_traincorpus_up <- tm_map(CIBC_traincorpus_up, removeNumbers)
+CIBC_traincorpus_up <- tm_map(CIBC_traincorpus_up, removePunctuation)
+CIBC_traincorpus_up <- tm_map(CIBC_traincorpus_up, content_transformer(tolower))
+CIBC_traincorpus_up <- tm_map(CIBC_traincorpus_up, removeWords, 
+                           stopwords("english"))
+CIBC_traincorpus_up <- tm_map(CIBC_traincorpus_up, stripWhitespace)
+
+
+CIBC_train_tdm_up <- DocumentTermMatrix(CIBC_traincorpus_up)
+dim(CIBC_train_tdm_up)
+CIBC_train_tdm_up <- removeSparseTerms(CIBC_train_tdm_up, 0.99)
+dim(CIBC_train_tdm_up)
+CIBC_train_tdm_up <- as.compressed.matrix(CIBC_train_tdm_up)
+
+CIBC_testcorpus_up <- VCorpus(VectorSource(CIBC_tweets_F_test_up$CIBC_tweet))
+
+CIBC_testcorpus_up <- tm_map(CIBC_testcorpus_up, removeNumbers)
+CIBC_testcorpus_up <- tm_map(CIBC_testcorpus_up, removePunctuation)
+CIBC_testcorpus_up <- tm_map(CIBC_testcorpus_up, content_transformer(tolower))
+CIBC_testcorpus_up <- tm_map(CIBC_testcorpus_up, removeWords, 
+                           stopwords("english"))
+CIBC_testcorpus_up <- tm_map(CIBC_testcorpus_up, stripWhitespace)
+
+
+CIBC_test_tdm_up <- DocumentTermMatrix(CIBC_testcorpus_up)
+dim(CIBC_test_tdm_up)
+CIBC_test_tdm_up <- removeSparseTerms(CIBC_test_tdm_up, 0.99)
+dim(CIBC_test_tdm_up)
+CIBC_test_tdm_up <- as.compressed.matrix(CIBC_test_tdm_up)
+
+set.seed(123456)
+
+CIBC_model_maxE_up <- maxent(CIBC_train_tdm_up, CIBC_tweets_F_train_up$Class)
+
+CIBC_results_maxE_up <- predict(CIBC_model_maxE_up, CIBC_test_tdm_up)
+
+CIBC_results_maxE_up <- as.character(CIBC_results_maxE_up[1:407])
+CIBC_results_maxE_up <- as.factor(CIBC_results_maxE_up)
+confusionMatrix(CIBC_results_maxE_up, CIBC_tweets_F_test_up$sentiment)
+
+
+
+set.seed(149256)
+
+CIBC_tuning.results_maxE <- tune.maxent(CIBC_train_tdm_up, CIBC_tweets_F_train_up$Class, nfold = 10, showall = TRUE, verbose = TRUE) 
+CIBC_tuning.results_maxE
+optimal_model <- maxent(CIBC_train_tdm_up, CIBC_tweets_F_train_up$Class, l1_regularizer = 0.2, use_sgd = FALSE)
+                 
+CIBC_pred <- predict(optimal_model, CIBC_train_tdm_up)
+CIBC_pred <- CIBC_pred[1:407, 1]
+CIBC_pred <- as.factor(CIBC_pred)
+confusionMatrix(CIBC_pred, CIBC_tweets_F_test_up$sentiment)
+
+roc.curve(CIBC_tweets_F_test_up$sentiment, CIBC_pred)
+
+```
+

@@ -1,0 +1,794 @@
+---
+title: "Checking"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r cars}
+summary(cars)
+```
+
+# RBC
+
+```{r}
+RBC_tweet_check <- RBC_tweets[3001:3379, ]
+RBC_tweet_check <- as.data.frame(RBC_tweet_check)
+RBC_text_check <- RBC_tweet_check$RBC_tweet_check
+
+RBC_text_check <- iconv(RBC_text_check, to = 'UTF-8')
+head(RBC_text_check)
+
+RBC_text_check <- str_replace_all(RBC_text_check, "[\\.\\,\\;]+", "")
+RBC_text_check <- str_replace_all(RBC_text_check, "http\\w+", "")
+RBC_text_check <- str_replace_all(RBC_text_check, "@\\w+", "")
+RBC_text_check <- str_replace_all(RBC_text_check, "[[:punct:]]", "")
+RBC_text_check <- str_replace_all(RBC_text_check, "[[:digit:]]", "")
+RBC_text_check <- str_replace_all(RBC_text_check, "^ ", "")
+RBC_text_check <- str_replace_all(RBC_text_check, "[<].*[>]", "")
+RBC_text_check <- str_replace_all(RBC_text_check, "[\n]", "")
+RBC_text_check <- str_replace_all(RBC_text_check, "[ |\t]{2,}", "")
+RBC_text_check = str_replace_all(RBC_text_check, "^\\s+|\\s+$", "")
+RBC_text_check = str_replace_all(RBC_text_check, "&amp", "")
+RBC_text_check = str_replace_all(RBC_text_check, "(RT|via)((?:\\b\\W*@\\w+)+)", "")
+RBC_text_check <- iconv(RBC_text_check, "UTF-8", "ASCII", sub="")
+head(RBC_text_check)
+
+
+
+
+RBC_sentimentscore_check <- get_sentiment(RBC_text_check)
+head(RBC_sentimentscore_check)
+
+RBC_tweet_check$polarity <- RBC_sentimentscore_check
+RBC_tweets_F_check <- RBC_tweet_check[, c('RBC_tweet_check', 'polarity')]
+head(RBC_tweets_F_check)
+
+RBC_tweets_F_check <- RBC_tweets_F_check[RBC_tweets_F_check$polarity != 0, ]
+RBC_tweets_F_check$sentiment <- ifelse(RBC_tweets_F_check$polarity < 0, "Negative", "Positive")
+RBC_tweets_F_check$sentiment <- as.factor(RBC_tweets_F_check$sentiment)
+table(RBC_tweets_F_check$sentiment)
+RBC_tweets_Full_check <- RBC_tweets_F_check[ ,c(1,3)]
+head(RBC_tweets_Full_check)
+RBC_tweets_Full_check$sentiment <- as.factor(RBC_tweets_Full_check$sentiment)
+table(RBC_tweets_Full_check$sentiment)
+
+
+```
+
+# SVM
+
+```{r}
+
+RBC_testmatrix_check <- create_matrix(RBC_tweets_Full_check[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = RBC_trainmatrix_down)
+dim(RBC_trainmatrix_down)
+dim(RBC_testmatrix_check)
+
+RBC_true.labels_check <- as.factor(RBC_tweets_Full_check[,2])
+
+
+RBC_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+RBC_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+RBC_tuning.results_check <- tune(svm, RBC_trainmatrix_down, as.factor(RBC_train.data_down[,2]), kernel="radial", ranges=list(cost=RBC_cost.weights, gamma=RBC_gamma.weights))
+
+RBC_svm.model.best_check = RBC_tuning.results_check$best.model
+
+RBC_svm.predictions.best_check <- predict(RBC_svm.model.best_check, RBC_testmatrix_check)
+
+RBC_tune_check <- confusionMatrix(data=RBC_svm.predictions.best_check, reference=RBC_true.labels_check, positive="Positive")
+
+
+RBC_svm.predictions.best_check <- predict(RBC_svm.model.best_check, RBC_testmatrix_check, decision.values = T)
+
+RBC_svm.prediction.values_check <- attributes(RBC_svm.predictions.best_check)$decision.values
+
+RBC_predictions_check <- prediction(RBC_svm.prediction.values_check, RBC_true.labels_check)
+roc.curve(RBC_true.labels_check, RBC_svm.prediction.values_check)
+
+```
+
+
+# Naive Bayes
+
+```{r}
+RBC_testmatrix_check <- create_matrix(RBC_tweets_Full_check$RBC_tweet_check, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = RBC_trainmatrix_down)
+# trace("create_matrix",edit=T)
+ 
+
+RBC_testmatrix_check <- weightBin(RBC_testmatrix_check)
+RBC_testmatrix_check <- as.data.frame(as.matrix(RBC_testmatrix_check))
+
+
+
+CtrlCV = trainControl(method = "cv", number = 10)
+
+
+RBC_modelNB_cv_check = train(RBC_trainmatrix_down, RBC_tweets_F_train_down$Class, method = "naive_bayes", trControl = CtrlCV)
+
+RBC_pred_cv_check <- predict(RBC_modelNB_cv_check, RBC_testmatrix_check)
+
+
+confusionMatrix(RBC_pred_cv_check, RBC_tweets_Full_check$sentiment)
+
+roc.curve(RBC_tweets_Full_check$sentiment, RBC_pred_cv_check)
+```
+
+
+# Maximum Entropy
+
+```{r}
+RBC_Full_check_corpus <- VCorpus(VectorSource(RBC_tweets_Full_check$RBC_tweet_check))
+
+RBC_Full_check_corpus <- tm_map(RBC_Full_check_corpus, removeNumbers)
+RBC_Full_check_corpus <- tm_map(RBC_Full_check_corpus, removePunctuation)
+RBC_Full_check_corpus <- tm_map(RBC_Full_check_corpus, content_transformer(tolower))
+RBC_Full_check_corpus <- tm_map(RBC_Full_check_corpus, removeWords, 
+                           stopwords("english"))
+RBC_Full_check_corpus <- tm_map(RBC_Full_check_corpus, stripWhitespace)
+RBC_Full_check_tdm <- DocumentTermMatrix(RBC_Full_check_corpus)
+dim(RBC_Full_check_tdm)
+RBC_Full_check_tdm  <- removeSparseTerms(RBC_Full_check_tdm, 0.99)
+RBC_Full_check_tdm <- as.compressed.matrix(RBC_Full_check_tdm)
+dim(RBC_Full_check_tdm)
+
+
+RBC_tuning.results_maxE <- tune.maxent(RBC_tweets_F_tdm_train, RBC_tweets_F_train$sentiment, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+RBC_tuning.results_maxE
+
+optimal_model <- maxent(RBC_tweets_F_tdm_train, RBC_tweets_F_train$sentiment, l1_regularizer = 1.0, use_sgd = FALSE)
+
+
+                  
+RBC_pred_check <- predict(optimal_model, RBC_Full_check_tdm)
+RBC_pred_check <- RBC_pred_check[1:268, 1]
+RBC_pred_check <- as.factor(RBC_pred_check)
+confusionMatrix(RBC_pred_check, RBC_tweets_Full_check$sentiment)
+
+roc.curve(RBC_tweets_Full_check$sentiment, RBC_pred_check)
+
+
+```
+
+
+
+# TD
+
+```{r}
+TD_tweet_check <- TD_tweets[4001:5000, ]
+TD_tweet_check <- as.data.frame(TD_tweet_check)
+TD_text_check <- TD_tweet_check$TD_tweet_check
+
+TD_text_check <- iconv(TD_text_check, to = 'UTF-8')
+head(TD_text_check)
+
+TD_text_check <- str_replace_all(TD_text_check, "[\\.\\,\\;]+", "")
+TD_text_check <- str_replace_all(TD_text_check, "http\\w+", "")
+TD_text_check <- str_replace_all(TD_text_check, "@\\w+", "")
+TD_text_check <- str_replace_all(TD_text_check, "[[:punct:]]", "")
+TD_text_check <- str_replace_all(TD_text_check, "[[:digit:]]", "")
+TD_text_check <- str_replace_all(TD_text_check, "^ ", "")
+TD_text_check <- str_replace_all(TD_text_check, "[<].*[>]", "")
+TD_text_check <- str_replace_all(TD_text_check, "[\n]", "")
+TD_text_check <- str_replace_all(TD_text_check, "[ |\t]{2,}", "")
+TD_text_check = str_replace_all(TD_text_check, "^\\s+|\\s+$", "")
+TD_text_check = str_replace_all(TD_text_check, "&amp", "")
+TD_text_check = str_replace_all(TD_text_check, "(RT|via)((?:\\b\\W*@\\w+)+)", "")
+TD_text_check <- iconv(TD_text_check, "UTF-8", "ASCII", sub="")
+head(TD_text_check)
+
+
+
+
+TD_sentimentscore_check <- get_sentiment(TD_text_check)
+head(TD_sentimentscore_check)
+
+TD_tweet_check$polarity <- TD_sentimentscore_check
+TD_tweets_F_check <- TD_tweet_check[, c('TD_tweet_check', 'polarity')]
+head(TD_tweets_F_check)
+
+TD_tweets_F_check <- TD_tweets_F_check[TD_tweets_F_check$polarity != 0, ]
+TD_tweets_F_check$sentiment <- ifelse(TD_tweets_F_check$polarity < 0, "Negative", "Positive")
+TD_tweets_F_check$sentiment <- as.factor(TD_tweets_F_check$sentiment)
+table(TD_tweets_F_check$sentiment)
+TD_tweets_Full_check <- TD_tweets_F_check[ ,c(1,3)]
+head(TD_tweets_Full_check)
+TD_tweets_Full_check$sentiment <- as.factor(TD_tweets_Full_check$sentiment)
+table(TD_tweets_Full_check$sentiment)
+
+```
+
+# SVM Method
+
+```{r}
+TD_testmatrix_check <- create_matrix(TD_tweets_Full_check[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = TD_trainmatrix_down)
+dim(TD_trainmatrix_down)
+dim(TD_testmatrix_check)
+
+TD_true.labels_check <- as.factor(TD_tweets_Full_check[,2])
+
+
+TD_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+TD_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+TD_tuning.results_check <- tune(svm, TD_trainmatrix_down, as.factor(TD_train.data_down[,2]), 
+                                kernel="radial", 
+                                ranges=list(cost=TD_cost.weights, gamma=TD_gamma.weights))
+
+TD_svm.model.best_check = TD_tuning.results_check$best.model
+
+TD_svm.predictions.best_check <- predict(TD_svm.model.best_check, TD_testmatrix_check)
+
+TD_tune_check <- confusionMatrix(data=TD_svm.predictions.best_check, reference=TD_true.labels_check, positive="Positive")
+
+
+TD_svm.predictions.best_check <- predict(TD_svm.model.best_check, TD_testmatrix_check, decision.values = T)
+
+TD_svm.prediction.values_check <- attributes(TD_svm.predictions.best_check)$decision.values
+
+TD_predictions_check <- prediction(TD_svm.prediction.values_check, TD_true.labels_check)
+roc.curve(TD_true.labels_check, TD_svm.prediction.values_check)
+
+```
+
+
+# Naive Bayes Method
+
+```{r}
+TD_testmatrix_check <- create_matrix(TD_tweets_Full_check$TD_tweet_check, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = TD_trainmatrix_down)
+# trace("create_matrix",edit=T)
+ 
+
+TD_testmatrix_check <- weightBin(TD_testmatrix_check)
+TD_testmatrix_check <- as.data.frame(as.matrix(TD_testmatrix_check))
+
+
+
+CtrlCV = trainControl(method = "cv", number = 10)
+
+
+TD_modelNB_cv_check = train(TD_trainmatrix_down, TD_tweets_F_train_down$Class, method = "naive_bayes", trControl = CtrlCV)
+
+TD_pred_cv_check <- predict(TD_modelNB_cv_check, TD_testmatrix_check)
+
+
+confusionMatrix(TD_pred_cv_check, TD_tweets_Full_check$sentiment)
+
+roc.curve(TD_tweets_Full_check$sentiment, TD_pred_cv_check)
+
+```
+
+
+# Maximum Entropy Method
+
+```{r}
+TD_Full_check_corpus <- VCorpus(VectorSource(TD_tweets_Full_check$TD_tweet_check))
+
+TD_Full_check_corpus <- tm_map(TD_Full_check_corpus, removeNumbers)
+TD_Full_check_corpus <- tm_map(TD_Full_check_corpus, removePunctuation)
+TD_Full_check_corpus <- tm_map(TD_Full_check_corpus, content_transformer(tolower))
+TD_Full_check_corpus <- tm_map(TD_Full_check_corpus, removeWords, 
+                           stopwords("english"))
+TD_Full_check_corpus <- tm_map(TD_Full_check_corpus, stripWhitespace)
+TD_Full_check_tdm <- DocumentTermMatrix(TD_Full_check_corpus)
+dim(TD_Full_check_tdm)
+TD_Full_check_tdm  <- removeSparseTerms(TD_Full_check_tdm, 0.99)
+dim(TD_Full_check_tdm)
+
+TD_Full_check_tdm <- as.compressed.matrix(TD_Full_check_tdm)
+
+TD_tuning.results_maxE <- tune.maxent(TD_tweets_F_tdm_train, TD_tweets_F_train$sentiment, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+TD_tuning.results_maxE
+
+optimal_model <- maxent(TD_tweets_F_tdm_train, TD_tweets_F_train$sentiment, l2_regularizer = 1.0, use_sgd = FALSE)
+
+
+                  
+TD_pred_check <- predict(optimal_model, TD_Full_check_tdm)
+TD_pred_check <- TD_pred_check[1:705, 1]
+TD_pred_check <- as.factor(TD_pred_check)
+confusionMatrix(TD_pred_check, TD_tweets_Full_check$sentiment)
+
+roc.curve(TD_tweets_Full_check$sentiment, TD_pred_check)
+
+
+```
+
+# SCOTIA
+
+```{r}
+SCOTIA_tweet_check <- SCOTIA_tweets[4001:5000, ]
+SCOTIA_tweet_check <- as.data.frame(SCOTIA_tweet_check)
+SCOTIA_text_check <- SCOTIA_tweet_check$SCOTIA_tweet_check
+
+SCOTIA_text_check <- iconv(SCOTIA_text_check, to = 'UTF-8')
+head(SCOTIA_text_check)
+
+SCOTIA_text_check <- str_replace_all(SCOTIA_text_check, "[\\.\\,\\;]+", "")
+SCOTIA_text_check <- str_replace_all(SCOTIA_text_check, "http\\w+", "")
+SCOTIA_text_check <- str_replace_all(SCOTIA_text_check, "@\\w+", "")
+SCOTIA_text_check <- str_replace_all(SCOTIA_text_check, "[[:punct:]]", "")
+SCOTIA_text_check <- str_replace_all(SCOTIA_text_check, "[[:digit:]]", "")
+SCOTIA_text_check <- str_replace_all(SCOTIA_text_check, "^ ", "")
+SCOTIA_text_check <- str_replace_all(SCOTIA_text_check, "[<].*[>]", "")
+SCOTIA_text_check <- str_replace_all(SCOTIA_text_check, "[\n]", "")
+SCOTIA_text_check <- str_replace_all(SCOTIA_text_check, "[ |\t]{2,}", "")
+SCOTIA_text_check = str_replace_all(SCOTIA_text_check, "^\\s+|\\s+$", "")
+SCOTIA_text_check = str_replace_all(SCOTIA_text_check, "&amp", "")
+SCOTIA_text_check = str_replace_all(SCOTIA_text_check, "(RT|via)((?:\\b\\W*@\\w+)+)", "")
+SCOTIA_text_check <- iconv(SCOTIA_text_check, "UTF-8", "ASCII", sub="")
+head(SCOTIA_text_check)
+
+
+SCOTIA_sentimentscore_check <- get_sentiment(SCOTIA_text_check)
+head(SCOTIA_sentimentscore_check)
+
+SCOTIA_tweet_check$polarity <- SCOTIA_sentimentscore_check
+SCOTIA_tweets_F_check <- SCOTIA_tweet_check[, c('SCOTIA_tweet_check', 'polarity')]
+head(SCOTIA_tweets_F_check)
+
+SCOTIA_tweets_F_check <- SCOTIA_tweets_F_check[SCOTIA_tweets_F_check$polarity != 0, ]
+SCOTIA_tweets_F_check$sentiment <- ifelse(SCOTIA_tweets_F_check$polarity < 0, "Negative", "Positive")
+SCOTIA_tweets_F_check$sentiment <- as.factor(SCOTIA_tweets_F_check$sentiment)
+table(SCOTIA_tweets_F_check$sentiment)
+SCOTIA_tweets_Full_check <- SCOTIA_tweets_F_check[ ,c(1,3)]
+head(SCOTIA_tweets_Full_check)
+SCOTIA_tweets_Full_check$sentiment <- as.factor(SCOTIA_tweets_Full_check$sentiment)
+table(SCOTIA_tweets_Full_check$sentiment)
+
+```
+
+# SVM Method
+
+```{r}
+SCOTIA_testmatrix_check <- create_matrix(SCOTIA_tweets_Full_check[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = SCOTIA_trainmatrix_down)
+dim(SCOTIA_trainmatrix_down)
+dim(SCOTIA_testmatrix_check)
+
+SCOTIA_true.labels_check <- as.factor(SCOTIA_tweets_Full_check[,2])
+
+
+SCOTIA_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+SCOTIA_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+SCOTIA_tuning.results_check <- tune(svm, SCOTIA_trainmatrix_down, as.factor(SCOTIA_train.data_down[,2]), kernel="radial", ranges=list(cost=SCOTIA_cost.weights, gamma=SCOTIA_gamma.weights))
+
+SCOTIA_svm.model.best_check = SCOTIA_tuning.results_check$best.model
+
+SCOTIA_svm.predictions.best_check <- predict(SCOTIA_svm.model.best_check, SCOTIA_testmatrix_check)
+
+SCOTIA_tune_check <- confusionMatrix(data=SCOTIA_svm.predictions.best_check, reference=SCOTIA_true.labels_check, positive="Positive")
+
+
+SCOTIA_svm.predictions.best_check <- predict(SCOTIA_svm.model.best_check, SCOTIA_testmatrix_check, decision.values = T)
+
+SCOTIA_svm.prediction.values_check <- attributes(SCOTIA_svm.predictions.best_check)$decision.values
+
+SCOTIA_predictions_check <- prediction(SCOTIA_svm.prediction.values_check, SCOTIA_true.labels_check)
+roc.curve(SCOTIA_true.labels_check, SCOTIA_svm.prediction.values_check)
+
+```
+
+
+# Naive Bayes Method
+
+
+```{r}
+
+SCOTIA_testmatrix_check <- create_matrix(SCOTIA_tweets_Full_check$SCOTIA_tweet_check, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = SCOTIA_trainmatrix_down)
+# trace("create_matrix",edit=T)
+ 
+
+SCOTIA_testmatrix_check <- weightBin(SCOTIA_testmatrix_check)
+SCOTIA_testmatrix_check <- as.data.frame(as.matrix(SCOTIA_testmatrix_check))
+
+
+
+CtrlCV = trainControl(method = "cv", number = 10)
+
+
+SCOTIA_modelNB_cv_check = train(SCOTIA_trainmatrix_down, SCOTIA_tweets_F_train_down$Class, method = "naive_bayes", trControl = CtrlCV)
+
+SCOTIA_pred_cv_check <- predict(SCOTIA_modelNB_cv_check, SCOTIA_testmatrix_check)
+
+
+confusionMatrix(SCOTIA_pred_cv_check, SCOTIA_tweets_Full_check$sentiment)
+
+roc.curve(SCOTIA_tweets_Full_check$sentiment, SCOTIA_pred_cv_check)
+
+
+```
+
+
+# Maximum Entropy Method
+
+```{r}
+SCOTIA_Full_check_corpus <- VCorpus(VectorSource(SCOTIA_tweets_Full_check$SCOTIA_tweet_check))
+
+SCOTIA_Full_check_corpus <- tm_map(SCOTIA_Full_check_corpus, removeNumbers)
+SCOTIA_Full_check_corpus <- tm_map(SCOTIA_Full_check_corpus, removePunctuation)
+SCOTIA_Full_check_corpus <- tm_map(SCOTIA_Full_check_corpus, content_transformer(tolower))
+SCOTIA_Full_check_corpus <- tm_map(SCOTIA_Full_check_corpus, removeWords, 
+                           stopwords("english"))
+SCOTIA_Full_check_corpus <- tm_map(SCOTIA_Full_check_corpus, stripWhitespace)
+SCOTIA_Full_check_tdm <- DocumentTermMatrix(SCOTIA_Full_check_corpus)
+dim(SCOTIA_Full_check_tdm)
+SCOTIA_Full_check_tdm  <- removeSparseTerms(SCOTIA_Full_check_tdm, 0.99)
+dim(SCOTIA_Full_check_tdm)
+
+SCOTIA_tuning.results_maxE <- tune.maxent(SCOTIA_tweets_F_tdm_train, SCOTIA_tweets_F_train$sentiment, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+SCOTIA_tuning.results_maxE
+
+optimal_model <- maxent(SCOTIA_tweets_F_tdm_train, SCOTIA_tweets_F_train$sentiment, l1_regularizer = 0.8, use_sgd = FALSE)
+
+
+                  
+SCOTIA_pred_check <- predict(optimal_model, SCOTIA_Full_check_tdm)
+SCOTIA_pred_check <- SCOTIA_pred_check[1:654, 1]
+SCOTIA_pred_check <- as.factor(SCOTIA_pred_check)
+confusionMatrix(SCOTIA_pred_check, SCOTIA_tweets_Full_check$sentiment)
+
+roc.curve(SCOTIA_tweets_Full_check$sentiment, SCOTIA_pred_check)
+
+
+```
+
+# BMO
+
+```{r}
+
+BMO_tweet_check <- BMO_tweets[3001:3800, ]
+BMO_tweet_check <- as.data.frame(BMO_tweet_check)
+BMO_text_check <- BMO_tweet_check$BMO_tweet_check
+
+BMO_text_check <- iconv(BMO_text_check, to = 'UTF-8')
+head(BMO_text_check)
+
+BMO_text_check <- str_replace_all(BMO_text_check, "[\\.\\,\\;]+", "")
+BMO_text_check <- str_replace_all(BMO_text_check, "http\\w+", "")
+BMO_text_check <- str_replace_all(BMO_text_check, "@\\w+", "")
+BMO_text_check <- str_replace_all(BMO_text_check, "[[:punct:]]", "")
+BMO_text_check <- str_replace_all(BMO_text_check, "[[:digit:]]", "")
+BMO_text_check <- str_replace_all(BMO_text_check, "^ ", "")
+BMO_text_check <- str_replace_all(BMO_text_check, "[<].*[>]", "")
+BMO_text_check <- str_replace_all(BMO_text_check, "[\n]", "")
+BMO_text_check <- str_replace_all(BMO_text_check, "[ |\t]{2,}", "")
+BMO_text_check = str_replace_all(BMO_text_check, "^\\s+|\\s+$", "")
+BMO_text_check = str_replace_all(BMO_text_check, "&amp", "")
+BMO_text_check = str_replace_all(BMO_text_check, "(RT|via)((?:\\b\\W*@\\w+)+)", "")
+BMO_text_check <- iconv(BMO_text_check, "UTF-8", "ASCII", sub="")
+head(BMO_text_check)
+
+
+
+
+BMO_sentimentscore_check <- get_sentiment(BMO_text_check)
+head(BMO_sentimentscore_check)
+
+BMO_tweet_check$polarity <- BMO_sentimentscore_check
+BMO_tweets_F_check <- BMO_tweet_check[, c('BMO_tweet_check', 'polarity')]
+head(BMO_tweets_F_check)
+
+BMO_tweets_F_check <- BMO_tweets_F_check[BMO_tweets_F_check$polarity != 0, ]
+BMO_tweets_F_check$sentiment <- ifelse(BMO_tweets_F_check$polarity < 0, "Negative", "Positive")
+BMO_tweets_F_check$sentiment <- as.factor(BMO_tweets_F_check$sentiment)
+table(BMO_tweets_F_check$sentiment)
+BMO_tweets_Full_check <- BMO_tweets_F_check[ ,c(1,3)]
+head(BMO_tweets_Full_check)
+BMO_tweets_Full_check$sentiment <- as.factor(BMO_tweets_Full_check$sentiment)
+table(BMO_tweets_Full_check$sentiment)
+
+```
+
+
+# SVM Method
+
+```{r}
+BMO_testmatrix_check <- create_matrix(BMO_tweets_Full_check[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = BMO_trainmatrix_down)
+dim(BMO_trainmatrix_down)
+dim(BMO_testmatrix_check)
+
+BMO_true.labels_check <- as.factor(BMO_tweets_Full_check[, 2])
+
+
+BMO_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+BMO_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+BMO_tuning.results_check <- tune(svm, BMO_trainmatrix_down, as.factor(BMO_train.data_down[, 2]), 
+                                  kernel="radial", 
+                                 ranges=list(cost=BMO_cost.weights, gamma=BMO_gamma.weights))
+
+BMO_svm.model.best_check = BMO_tuning.results_check$best.model
+
+BMO_svm.predictions.best_check <- predict(BMO_svm.model.best_check, BMO_testmatrix_check)
+
+BMO_tune_check <- confusionMatrix(data=BMO_svm.predictions.best_check, reference=BMO_true.labels_check, positive="Positive")
+
+
+BMO_svm.predictions.best_check <- predict(BMO_svm.model.best_check, BMO_testmatrix_check, decision.values = T)
+
+BMO_svm.prediction.values_check <- attributes(BMO_svm.predictions.best_check)$decision.values
+
+BMO_predictions_check <- prediction(BMO_svm.prediction.values_check, BMO_true.labels_check)
+roc.curve(BMO_true.labels_check, BMO_svm.prediction.values_check)
+
+```
+
+
+# Naive Bayes Method
+
+```{r}
+BMO_testmatrix_check <- create_matrix(BMO_tweets_Full_check$BMO_tweet_check, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = BMO_trainmatrix_down)
+# trace("create_matrix",edit=T)
+ 
+
+BMO_testmatrix_check <- weightBin(BMO_testmatrix_check)
+BMO_testmatrix_check <- as.data.frame(as.matrix(BMO_testmatrix_check))
+
+
+
+CtrlCV = trainControl(method = "cv", number = 10)
+
+
+BMO_modelNB_cv_check = train(BMO_trainmatrix_down, BMO_tweets_F_train_down$Class, method = "naive_bayes", trControl = CtrlCV)
+
+BMO_pred_cv_check <- predict(BMO_modelNB_cv_check, BMO_testmatrix_check)
+
+
+confusionMatrix(BMO_pred_cv_check, BMO_tweets_Full_check$sentiment)
+
+roc.curve(BMO_tweets_Full_check$sentiment, BMO_pred_cv_check)
+
+```
+
+
+# Maximum Entropy Method
+
+```{r}
+BMO_Full_check_corpus <- VCorpus(VectorSource(BMO_tweets_Full_check$BMO_tweet_check))
+
+BMO_Full_check_corpus <- tm_map(BMO_Full_check_corpus, removeNumbers)
+BMO_Full_check_corpus <- tm_map(BMO_Full_check_corpus, removePunctuation)
+BMO_Full_check_corpus <- tm_map(BMO_Full_check_corpus, content_transformer(tolower))
+BMO_Full_check_corpus <- tm_map(BMO_Full_check_corpus, removeWords, 
+                           stopwords("english"))
+BMO_Full_check_corpus <- tm_map(BMO_Full_check_corpus, stripWhitespace)
+BMO_Full_check_tdm <- DocumentTermMatrix(BMO_Full_check_corpus)
+dim(BMO_Full_check_tdm)
+BMO_Full_check_tdm  <- removeSparseTerms(BMO_Full_check_tdm, 0.99)
+dim(BMO_Full_check_tdm)
+
+BMO_tuning.results_maxE <- tune.maxent(BMO_tweets_F_tdm_train, BMO_tweets_F_train$sentiment, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+BMO_tuning.results_maxE
+
+optimal_model <- maxent(BMO_tweets_F_tdm_train, BMO_tweets_F_train$sentiment, l2_regularizer = 0.2, use_sgd = FALSE)
+
+
+                  
+BMO_pred_check <- predict(optimal_model, BMO_Full_check_tdm)
+BMO_pred_check <- BMO_pred_check[1:639, 1]
+BMO_pred_check <- as.factor(BMO_pred_check)
+confusionMatrix(BMO_pred_check, BMO_tweets_Full_check$sentiment)
+
+roc.curve(BMO_tweets_Full_check$sentiment, BMO_pred_check)
+
+
+```
+
+# CIBC
+
+```{r}
+
+CIBC_tweet_check <- CIBC_tweets[2001:2190, ]
+CIBC_tweet_check <- as.data.frame(CIBC_tweet_check)
+CIBC_text_check <- CIBC_tweet_check$CIBC_tweet_check
+
+CIBC_text_check <- iconv(CIBC_text_check, to = 'UTF-8')
+head(CIBC_text_check)
+
+CIBC_text_check <- str_replace_all(CIBC_text_check, "[\\.\\,\\;]+", "")
+CIBC_text_check <- str_replace_all(CIBC_text_check, "http\\w+", "")
+CIBC_text_check <- str_replace_all(CIBC_text_check, "@\\w+", "")
+CIBC_text_check <- str_replace_all(CIBC_text_check, "[[:punct:]]", "")
+CIBC_text_check <- str_replace_all(CIBC_text_check, "[[:digit:]]", "")
+CIBC_text_check <- str_replace_all(CIBC_text_check, "^ ", "")
+CIBC_text_check <- str_replace_all(CIBC_text_check, "[<].*[>]", "")
+CIBC_text_check <- str_replace_all(CIBC_text_check, "[\n]", "")
+CIBC_text_check <- str_replace_all(CIBC_text_check, "[ |\t]{2,}", "")
+CIBC_text_check = str_replace_all(CIBC_text_check, "^\\s+|\\s+$", "")
+CIBC_text_check = str_replace_all(CIBC_text_check, "&amp", "")
+CIBC_text_check = str_replace_all(CIBC_text_check, "(RT|via)((?:\\b\\W*@\\w+)+)", "")
+CIBC_text_check <- iconv(CIBC_text_check, "UTF-8", "ASCII", sub="")
+head(CIBC_text_check)
+
+
+
+
+CIBC_sentimentscore_check <- get_sentiment(CIBC_text_check)
+head(CIBC_sentimentscore_check)
+
+CIBC_tweet_check$polarity <- CIBC_sentimentscore_check
+CIBC_tweets_F_check <- CIBC_tweet_check[, c('CIBC_tweet_check', 'polarity')]
+head(CIBC_tweets_F_check)
+
+CIBC_tweets_F_check <- CIBC_tweets_F_check[CIBC_tweets_F_check$polarity != 0, ]
+CIBC_tweets_F_check$sentiment <- ifelse(CIBC_tweets_F_check$polarity < 0, "Negative", "Positive")
+CIBC_tweets_F_check$sentiment <- as.factor(CIBC_tweets_F_check$sentiment)
+table(CIBC_tweets_F_check$sentiment)
+CIBC_tweets_Full_check <- CIBC_tweets_F_check[ ,c(1,3)]
+head(CIBC_tweets_Full_check)
+CIBC_tweets_Full_check$sentiment <- as.factor(CIBC_tweets_Full_check$sentiment)
+table(CIBC_tweets_Full_check$sentiment)
+
+```
+
+# SVM Method
+
+```{r}
+CIBC_testmatrix_check <- create_matrix(CIBC_tweets_Full_check[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = CIBC_trainmatrix_down)
+dim(CIBC_trainmatrix_down)
+dim(CIBC_testmatrix_check)
+
+CIBC_true.labels_check <- as.factor(CIBC_tweets_Full_check[,2])
+
+
+CIBC_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+CIBC_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+CIBC_tuning.results_check <- tune(svm, CIBC_trainmatrix_down, as.factor(CIBC_train.data_down[,2]), kernel="radial", ranges=list(cost=CIBC_cost.weights, gamma=CIBC_gamma.weights))
+
+CIBC_svm.model.best_check = CIBC_tuning.results_check$best.model
+
+CIBC_svm.predictions.best_check <- predict(CIBC_svm.model.best_check, CIBC_testmatrix_check)
+
+CIBC_tune_check <- confusionMatrix(data=CIBC_svm.predictions.best_check, reference=CIBC_true.labels_check, positive="Positive")
+
+
+CIBC_svm.predictions.best_check <- predict(CIBC_svm.model.best_check, CIBC_testmatrix_check, decision.values = T)
+
+CIBC_svm.prediction.values_check <- attributes(CIBC_svm.predictions.best_check)$decision.values
+
+CIBC_predictions_check <- prediction(CIBC_svm.prediction.values_check, CIBC_true.labels_check)
+roc.curve(CIBC_true.labels_check, CIBC_svm.prediction.values_check)
+
+```
+
+# Naive Bayes Method
+
+```{r}
+CIBC_testmatrix_check <- create_matrix(CIBC_tweets_Full_check$CIBC_tweet_check, 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = CIBC_trainmatrix_down)
+# trace("create_matrix",edit=T)
+ 
+
+CIBC_testmatrix_check <- weightBin(CIBC_testmatrix_check)
+CIBC_testmatrix_check <- as.data.frame(as.matrix(CIBC_testmatrix_check))
+
+
+
+CtrlCV = trainControl(method = "cv", number = 10)
+
+
+CIBC_modelNB_cv_check = train(CIBC_trainmatrix_down, CIBC_tweets_F_train_down$Class, method = "naive_bayes", trControl = CtrlCV)
+
+CIBC_pred_cv_check <- predict(CIBC_modelNB_cv_check, CIBC_testmatrix_check)
+
+
+confusionMatrix(CIBC_pred_cv_check, CIBC_tweets_Full_check$sentiment)
+
+roc.curve(CIBC_tweets_Full_check$sentiment, CIBC_pred_cv_check)
+
+```
+
+
+# Maximum Entropy Method
+
+```{r}
+CIBC_Full_check_corpus <- VCorpus(VectorSource(CIBC_tweets_Full_check$CIBC_tweet_check))
+
+CIBC_Full_check_corpus <- tm_map(CIBC_Full_check_corpus, removeNumbers)
+CIBC_Full_check_corpus <- tm_map(CIBC_Full_check_corpus, removePunctuation)
+CIBC_Full_check_corpus <- tm_map(CIBC_Full_check_corpus, content_transformer(tolower))
+CIBC_Full_check_corpus <- tm_map(CIBC_Full_check_corpus, removeWords, 
+                           stopwords("english"))
+CIBC_Full_check_corpus <- tm_map(CIBC_Full_check_corpus, stripWhitespace)
+CIBC_Full_check_tdm <- DocumentTermMatrix(CIBC_Full_check_corpus)
+dim(CIBC_Full_check_tdm)
+CIBC_Full_check_tdm  <- removeSparseTerms(CIBC_Full_check_tdm, 0.99)
+dim(CIBC_Full_check_tdm)
+
+CIBC_tuning.results_maxE <- tune.maxent(CIBC_tweets_F_tdm_train, CIBC_tweets_F_train$sentiment, nfold = 10, showall = TRUE, verbose = TRUE) 
+
+CIBC_tuning.results_maxE
+
+optimal_model <- maxent(CIBC_tweets_F_tdm_train, CIBC_tweets_F_train$sentiment, l1_regularizer = 1.0, use_sgd = FALSE)
+
+
+                  
+CIBC_pred_check <- predict(optimal_model, CIBC_Full_check_tdm)
+CIBC_pred_check <- CIBC_pred_check[1:129, 1]
+CIBC_pred_check <- as.factor(CIBC_pred_check)
+confusionMatrix(CIBC_pred_check, CIBC_tweets_Full_check$sentiment)
+
+roc.curve(CIBC_tweets_Full_check$sentiment, CIBC_pred_check)
+
+
+
+```
+

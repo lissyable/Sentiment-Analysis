@@ -1,0 +1,1605 @@
+---
+title: "SVM"
+output: word_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+
+
+
+```{r}
+
+RBC_sentimentscore <- get_sentiment(RBC_text)
+head(RBC_sentimentscore)
+class(RBC_text)
+RBC_tweet$polarity <- RBC_sentimentscore
+RBC_tweets_F <- RBC_tweet[, c('RBC_tweet', 'polarity')]
+head(RBC_tweets_F)
+RBC_tweets_F <- RBC_tweets_F[RBC_tweets_F$polarity != 0, ]
+RBC_tweets_F$sentiment <- ifelse(RBC_tweets_F$polarity < 0, "Negative", "Positive")
+RBC_tweets_F$sentiment <- as.factor(RBC_tweets_F$sentiment)
+table(RBC_tweets_F$sentiment)
+RBC_tweets_Full <- RBC_tweets_F[ ,c(1,3)]
+head(RBC_tweets_Full)
+RBC_tweets_Full$sentiment <- as.factor(RBC_tweets_Full$sentiment)
+table(RBC_tweets_Full$sentiment)
+```
+
+# Original dataset
+
+```{r}
+set.seed(1)
+RBC_tweets_Full <- RBC_tweets_Full[sample(nrow(RBC_tweets_Full)), ]
+RBC_tweets_Full <- RBC_tweets_Full[sample(nrow(RBC_tweets_Full)), ]
+```
+
+
+```{r}
+RBC_indexes <- createDataPartition(RBC_tweets_Full[,2], p=0.7, list = FALSE)
+
+RBC_train.data <- RBC_tweets_Full[RBC_indexes,]
+RBC_test.data <- RBC_tweets_Full[-RBC_indexes,]
+table(RBC_train.data$sentiment)
+```
+
+
+```{r}
+RBC_trainmatrix <- create_matrix(RBC_train.data[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+RBC_testmatrix <- create_matrix(RBC_test.data[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = RBC_trainmatrix)
+ 
+ # trace("create_matrix",edit=T) 
+  
+```
+
+
+
+
+```{r}
+
+RBC_svm.model <- svm(RBC_trainmatrix, RBC_train.data[, 2])
+
+summary(RBC_svm.model)
+
+RBC_svm.predictions <- predict(RBC_svm.model, RBC_testmatrix)
+
+RBC_true.labels <- as.factor(RBC_test.data[,2])
+
+RBC_original <- confusionMatrix(data=RBC_svm.predictions, reference=RBC_true.labels, positive = "Positive")
+
+
+```
+
+
+```{r}
+set.seed(1492)
+RBC_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+RBC_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+RBC_tuning.results <- tune(svm, RBC_trainmatrix, as.factor(RBC_train.data[,2]),
+                      kernel="radial",
+                      ranges=list(cost=RBC_cost.weights, gamma=RBC_gamma.weights))
+
+# view optimization results
+print(RBC_tuning.results)
+
+# plot results
+plot(RBC_tuning.results, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+```
+
+
+
+```{r}
+# get best model and evaluate predictions
+RBC_svm.model.best = RBC_tuning.results$best.model
+
+RBC_svm.predictions.best <- predict(RBC_svm.model.best, RBC_testmatrix)
+
+RBC_tune_original <- confusionMatrix(data=RBC_svm.predictions.best, reference=RBC_true.labels, positive="Positive")
+```
+# ROC and AUC
+
+```{r}
+RBC_svm.predictions.best <- predict(RBC_svm.model.best, RBC_testmatrix, decision.values = T)
+
+RBC_svm.prediction.values <- attributes(RBC_svm.predictions.best)$decision.values
+
+RBC_predictions <- prediction(RBC_svm.prediction.values, RBC_true.labels)
+
+
+roc.curve(RBC_true.labels, RBC_svm.prediction.values)
+
+RBC_perf <- performance(RBC_predictions, "tpr", "fpr")
+plot(RBC_perf, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+
+RBC_auc <- performance(RBC_predictions, "auc")
+RBC_auc <- unlist(slot(RBC_auc, "y.values"))
+RBC_auc <- round(RBC_auc, 4)
+RBC_auc
+legend(0.6, 0.2, RBC_auc, title = "AUC", cex = 1)
+
+```
+
+
+
+# Upsample Method
+
+
+```{r}
+RBC_train.data_up <- upSample(x = RBC_train.data$RBC_tweet, y = RBC_train.data$sentiment)
+table(RBC_train.data_up$Class)
+
+RBC_test.data_up <- RBC_test.data
+```
+
+```{r}
+set.seed(1)
+RBC_train.data_up <- RBC_train.data_up[sample(nrow(RBC_train.data_up)), ]
+RBC_train.data_up <- RBC_train.data_up[sample(nrow(RBC_train.data_up)), ]
+```
+
+
+```{r}
+RBC_trainmatrix_up <- create_matrix(RBC_train.data_up[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+RBC_testmatrix_up <- create_matrix(RBC_test.data_up[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = RBC_trainmatrix_up)
+ 
+
+```
+
+
+
+```{r}
+
+RBC_svm.model_up <- svm(RBC_trainmatrix_up, as.factor(RBC_train.data_up[, 2]))
+
+summary(RBC_svm.model_up)
+
+RBC_svm.predictions_up <- predict(RBC_svm.model_up, RBC_testmatrix_up)
+
+RBC_true.labels_up <- as.factor(RBC_test.data_up[,2])
+
+RBC_up <- confusionMatrix(data=RBC_svm.predictions_up, reference=RBC_true.labels_up, positive = "Positive")
+```
+
+
+```{r}
+
+RBC_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+RBC_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+RBC_tuning.results_up <- tune(svm, RBC_trainmatrix_up, as.factor(RBC_train.data_up[,2]), 
+                              kernel="radial", 
+                              ranges=list(cost=RBC_cost.weights, gamma=RBC_gamma.weights))
+
+
+print(RBC_tuning.results_up)
+
+# plot results
+
+plot(RBC_tuning.results_up, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+```
+
+```{r}
+# get best model and evaluate predictions
+RBC_svm.model.best_up = RBC_tuning.results_up$best.model
+
+RBC_svm.predictions.best_up <- predict(RBC_svm.model.best_up, RBC_testmatrix_up)
+
+RBC_tune_up <- confusionMatrix(data=RBC_svm.predictions.best_up, reference=RBC_true.labels_up, positive="Positive")
+```
+
+
+```{r}
+RBC_svm.predictions.best_up <- predict(RBC_svm.model.best_up, RBC_testmatrix_up, decision.values = T)
+
+RBC_svm.prediction.values_up <- attributes(RBC_svm.predictions.best_up)$decision.values
+
+RBC_predictions_up <- prediction(RBC_svm.prediction.values_up, RBC_true.labels_up)
+
+roc.curve(RBC_true.labels_up, RBC_svm.prediction.values_up)
+
+RBC_perf_up <- performance(RBC_predictions_up, "tpr", "fpr")
+plot(RBC_perf_up, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+
+RBC_auc_up <- performance(RBC_predictions_up, "auc")
+RBC_auc_up <- unlist(slot(RBC_auc_up, "y.values"))
+RBC_auc_up <- round(RBC_auc_up, 4)
+RBC_auc_up
+legend(0.6, 0.2, RBC_auc_up, title = "AUC", cex = 1)
+```
+
+# Downsample Method
+
+
+
+```{r}
+RBC_train.data_down <- downSample(x = RBC_train.data$RBC_tweet, y = RBC_train.data$sentiment)
+table(RBC_train.data_down$Class)
+
+RBC_test.data_down <- RBC_test.data
+```
+
+
+
+```{r}
+set.seed(1)
+RBC_train.data_down <- RBC_train.data_down[sample(nrow(RBC_train.data_down)), ]
+RBC_train.data_down <- RBC_train.data_down[sample(nrow(RBC_train.data_down)), ]
+```
+
+
+```{r}
+RBC_trainmatrix_down <- create_matrix(RBC_train.data_down[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+RBC_testmatrix_down <- create_matrix(RBC_test.data_down[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = RBC_trainmatrix_down)
+ 
+```
+
+
+
+```{r}
+
+RBC_svm.model_down <- svm(RBC_trainmatrix_down, as.factor(RBC_train.data_down[, 2]))
+
+summary(RBC_svm.model_down)
+
+RBC_svm.predictions_down <- predict(RBC_svm.model_down, RBC_testmatrix_down)
+
+RBC_true.labels_down <- as.factor(RBC_test.data_down[,2])
+
+RBC_down <- confusionMatrix(data=RBC_svm.predictions_down, reference=RBC_true.labels_down, positive = "Positive")
+```
+
+```{r}
+
+RBC_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+RBC_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+RBC_tuning.results_down <- tune(svm, RBC_trainmatrix_down, as.factor(RBC_train.data_down[,2]), kernel="radial", ranges=list(cost=RBC_cost.weights, gamma=RBC_gamma.weights))
+
+
+print(RBC_tuning.results_down)
+
+# plot results
+
+plot(RBC_tuning.results_down, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+```
+
+
+```{r}
+# get best model and evaluate predictions
+RBC_svm.model.best_down = RBC_tuning.results_down$best.model
+
+RBC_svm.predictions.best_down <- predict(RBC_svm.model.best_down, RBC_testmatrix_down)
+
+RBC_tune_down <- confusionMatrix(data=RBC_svm.predictions.best_down, reference=RBC_true.labels_down, positive="Positive")
+
+
+```
+
+
+```{r}
+RBC_svm.predictions.best_down <- predict(RBC_svm.model.best_down, RBC_testmatrix_down, decision.values = T)
+
+RBC_svm.prediction.values_down <- attributes(RBC_svm.predictions.best_down)$decision.values
+
+RBC_predictions_down <- prediction(RBC_svm.prediction.values_down, RBC_true.labels_down)
+
+
+roc.curve(RBC_true.labels_down, RBC_svm.prediction.values_down)
+
+RBC_perf_down = performance(RBC_predictions_down, measure = "auc", x.measure = "cutoff") 
+RBC_perf = performance(RBC_predictions_down, "tpr","fpr") 
+plot(RBC_perf, colorize=T,main=paste("AUC:",(RBC_perf_down@y.values)))
+
+
+```
+
+
+# SMOTE Method
+
+```{r}
+as.data.frame(table(RBC_train.data$sentiment))
+RBC_train.data_smote <- SMOTE(sentiment ~ ., data=RBC_train.data, k=5, perc.over = 200, perc.under = 150, learner=NULL)
+table(RBC_train.data_smote$sentiment)
+RBC_test.data_smote <- RBC_test.data
+```
+
+
+
+```{r}
+set.seed(1)
+RBC_train.data_smote <- RBC_train.data_smote[sample(nrow(RBC_train.data_smote)), ]
+RBC_train.data_smote <- RBC_train.data_smote[sample(nrow(RBC_train.data_smote)), ]
+```
+
+
+```{r}
+RBC_trainmatrix_smote <- create_matrix(RBC_train.data_smote[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+RBC_testmatrix_smote <- create_matrix(RBC_test.data_smote[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = RBC_trainmatrix_smote)
+ 
+```
+
+
+
+```{r}
+
+RBC_svm.model_smote <- svm(RBC_trainmatrix_smote, as.factor(RBC_train.data_smote[, 2]))
+
+summary(RBC_svm.model_smote)
+
+RBC_svm.predictions_smote <- predict(RBC_svm.model_smote, RBC_testmatrix_smote)
+
+RBC_true.labels_smote <- as.factor(RBC_test.data_smote[,2])
+
+RBC_smote <- confusionMatrix(data=RBC_svm.predictions_smote, reference=RBC_true.labels_smote, positive = "Positive")
+
+```
+
+
+
+
+```{r}
+RBC_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+RBC_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+RBC_tuning.results_smote <- tune(svm, RBC_trainmatrix_smote, as.factor(RBC_train.data_smote[,2]), kernel="radial", ranges=list(cost=RBC_cost.weights, gamma=RBC_gamma.weights))
+
+# view optimization results
+print(RBC_tuning.results_smote)
+
+# plot results
+plot(RBC_tuning.results_smote, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+```
+
+
+```{r}
+# get best model and evaluate predictions
+RBC_svm.model.best_smote = RBC_tuning.results_smote$best.model
+
+RBC_svm.predictions.best_smote <- predict(RBC_svm.model.best_smote, RBC_testmatrix_smote)
+
+RBC_tune_smote <- confusionMatrix(data=RBC_svm.predictions.best_smote, reference=RBC_true.labels_smote, positive="Positive")
+```
+
+
+```{r}
+RBC_svm.predictions.best_smote <- predict(RBC_svm.model.best_smote, RBC_testmatrix_smote, decision.values = T)
+
+RBC_svm.prediction.values_smote <- attributes(RBC_svm.predictions.best_smote)$decision.values
+
+RBC_predictions_smote <- prediction(RBC_svm.prediction.values_smote, RBC_true.labels_smote)
+
+roc.curve(RBC_true.labels_smote, RBC_svm.prediction.values_smote)
+
+RBC_perf_smote <- performance(RBC_predictions_smote, "tpr", "fpr")
+plot(RBC_perf_smote, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+
+RBC_auc_smote <- performance(RBC_predictions_smote, "auc")
+RBC_auc_smote <- unlist(slot(RBC_auc_smote, "y.values"))
+RBC_auc_smote <- round(RBC_auc_smote, 4)
+RBC_auc_smote
+legend(0.6, 0.2, RBC_auc_smote, title = "AUC", cex = 1)
+
+
+```
+
+
+```{r}
+models <- list(original = RBC_tune_original,
+               down = RBC_tune_down,
+               up = RBC_tune_up,
+               smote = RBC_tune_smote)
+```
+
+
+```{r}
+comparison <- data.frame(model = names(models),
+                         Sensitivity = rep(NA, length(models)),
+                         Specificity = rep(NA, length(models)),
+                         Precision = rep(NA, length(models)),
+                         Recall = rep(NA, length(models)),
+                         F1 = rep(NA, length(models)),
+                         Accuracy = rep(NA, length(models)))
+
+for (name in names(models)) {
+  model <- get(paste0("RBC_tune_", name))
+  
+  comparison[comparison$model == name, ] <- filter(comparison, model == name) %>%
+    mutate(Sensitivity = model$byClass["Sensitivity"],
+           Specificity = model$byClass["Specificity"],
+           Precision = model$byClass["Precision"],
+           Recall = model$byClass["Recall"],
+           F1 = model$byClass["F1"],
+      Accuracy = model$byClass["Accuracy"])
+}
+
+
+comparison %>%
+  gather(x, y, Sensitivity:Accuracy) %>%
+  ggplot(aes(x = x, y = y, color = model)) +
+    geom_jitter(width = 0.2, alpha = 0.5, size = 3)
+```
+# downSample method performs well
+
+# TD
+
+```{r}
+TD_sentimentscore <- get_sentiment(TD_text)
+head(TD_sentimentscore)
+class(TD_text)
+head(TD_tweet)
+TD_tweet$polarity <- TD_sentimentscore
+TD_tweets_F <- TD_tweet[, c('TD_tweet', 'polarity')]
+head(TD_tweets_F)
+TD_tweets_F <- TD_tweets_F[TD_tweets_F$polarity != 0, ]
+TD_tweets_F$sentiment <- ifelse(TD_tweets_F$polarity < 0, "Negative", "Positive")
+TD_tweets_F$sentiment <- as.factor(TD_tweets_F$sentiment)
+table(TD_tweets_F$sentiment)
+TD_tweets_Full <- TD_tweets_F[ ,c(1,3)]
+head(TD_tweets_Full)
+TD_tweets_Full$sentiment <- as.factor(TD_tweets_Full$sentiment)
+table(TD_tweets_Full$sentiment)
+
+set.seed(1)
+TD_tweets_Full <- TD_tweets_Full[sample(nrow(TD_tweets_Full)), ]
+TD_tweets_Full <- TD_tweets_Full[sample(nrow(TD_tweets_Full)), ]
+
+TD_indexes <- createDataPartition(TD_tweets_Full[,2], p=0.7, list = FALSE)
+
+TD_train.data <- TD_tweets_Full[TD_indexes,]
+TD_test.data <- TD_tweets_Full[-TD_indexes,]
+table(TD_train.data$sentiment)
+
+```
+
+
+```{r}
+TD_trainmatrix <- create_matrix(TD_train.data[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+TD_testmatrix <- create_matrix(TD_test.data[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = TD_trainmatrix)
+ 
+ # trace("create_matrix",edit=T) 
+  
+```
+
+```{r}
+TD_svm.model <- svm(TD_trainmatrix, TD_train.data[, 2])
+summary(TD_svm.model)
+TD_svm.predictions <- predict(TD_svm.model, TD_testmatrix)
+TD_true.labels <- as.factor(TD_test.data[,2])
+TD_original <- confusionMatrix(data=TD_svm.predictions, reference=TD_true.labels, positive = "Positive")
+
+set.seed(1492)
+TD_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+TD_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+TD_tuning.results <- tune(svm, TD_trainmatrix, as.factor(TD_train.data[,2]),
+                      kernel="radial",
+                      ranges=list(cost=TD_cost.weights, gamma=TD_gamma.weights))
+print(TD_tuning.results)
+plot(TD_tuning.results, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+
+TD_svm.model.best = TD_tuning.results$best.model
+TD_svm.predictions.best <- predict(TD_svm.model.best, TD_testmatrix)
+TD_tune_original <- confusionMatrix(data=TD_svm.predictions.best, reference=TD_true.labels, positive="Positive")
+
+
+TD_svm.predictions.best <- predict(TD_svm.model.best, TD_testmatrix, decision.values = T)
+TD_svm.prediction.values <- attributes(TD_svm.predictions.best)$decision.values
+TD_predictions <- prediction(TD_svm.prediction.values, TD_true.labels)
+
+roc.curve(TD_true.labels, TD_svm.prediction.values)
+  TD_perf <- performance(TD_predictions, "tpr", "fpr")
+plot(TD_perf, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+TD_auc <- performance(TD_predictions, "auc")
+TD_auc <- unlist(slot(TD_auc, "y.values"))
+TD_auc <- round(TD_auc, 4)
+TD_auc
+legend(0.6, 0.2, TD_auc, title = "AUC", cex = 1)
+
+```
+
+# upSample Method
+
+```{r}
+TD_train.data_up <- upSample(x = TD_train.data$TD_tweet, y = TD_train.data$sentiment)
+table(TD_train.data_up$Class)
+TD_test.data_up <- TD_test.data
+
+
+set.seed(1)
+TD_train.data_up <- TD_train.data_up[sample(nrow(TD_train.data_up)), ]
+TD_train.data_up <- TD_train.data_up[sample(nrow(TD_train.data_up)), ]
+
+
+TD_trainmatrix_up <- create_matrix(TD_train.data_up[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+TD_testmatrix_up <- create_matrix(TD_test.data_up[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = TD_trainmatrix_up)
+
+
+TD_svm.model_up <- svm(TD_trainmatrix_up, as.factor(TD_train.data_up[, 2]))
+summary(TD_svm.model_up)
+TD_svm.predictions_up <- predict(TD_svm.model_up, TD_testmatrix_up)
+TD_true.labels_up <- as.factor(TD_test.data_up[,2])
+TD_up <- confusionMatrix(data=TD_svm.predictions_up, reference=TD_true.labels_up, positive = "Positive")
+
+
+TD_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+TD_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+TD_tuning.results_up <- tune(svm, TD_trainmatrix_up, as.factor(TD_train.data_up[,2]), kernel="radial", ranges=list(cost=TD_cost.weights, gamma=TD_gamma.weights))
+print(TD_tuning.results_up)
+plot(TD_tuning.results_up, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+
+# get best model and evaluate predictions
+TD_svm.model.best_up = TD_tuning.results_up$best.model
+TD_svm.predictions.best_up <- predict(TD_svm.model.best_up, TD_testmatrix_up)
+TD_tune_up <- confusionMatrix(data=TD_svm.predictions.best_up, reference=TD_true.labels_up, positive="Positive")
+
+
+TD_svm.predictions.best_up <- predict(TD_svm.model.best_up, TD_testmatrix_up, decision.values = T)
+TD_svm.prediction.values_up <- attributes(TD_svm.predictions.best_up)$decision.values
+TD_predictions_up <- prediction(TD_svm.prediction.values_up, TD_true.labels_up)
+
+roc.curve(TD_true.labels_up, TD_svm.prediction.values_up)
+TD_perf_up <- performance(TD_predictions_up, "tpr", "fpr")
+plot(TD_perf_up, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+TD_auc_up <- performance(TD_predictions_up, "auc")
+TD_auc_up <- unlist(slot(TD_auc_up, "y.values"))
+TD_auc_up <- round(TD_auc_up, 4)
+TD_auc_up
+legend(0.6, 0.2, TD_auc_up, title = "AUC", cex = 1)
+
+```
+
+
+# downSample Method
+
+```{r}
+TD_train.data_down <- downSample(x = TD_train.data$TD_tweet, y = TD_train.data$sentiment)
+table(TD_train.data_down$Class)
+TD_test.data_down <- TD_test.data
+
+set.seed(1)
+TD_train.data_down <- TD_train.data_down[sample(nrow(TD_train.data_down)), ]
+TD_train.data_down <- TD_train.data_down[sample(nrow(TD_train.data_down)), ]
+
+TD_trainmatrix_down <- create_matrix(TD_train.data_down[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+TD_testmatrix_down <- create_matrix(TD_test.data_down[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = TD_trainmatrix_down)
+
+
+TD_svm.model_down <- svm(TD_trainmatrix_down, as.factor(TD_train.data_down[, 2]))
+summary(TD_svm.model_down)
+TD_svm.predictions_down <- predict(TD_svm.model_down, TD_testmatrix_down)
+TD_true.labels_down <- as.factor(TD_test.data_down[,2])
+TD_down <- confusionMatrix(data=TD_svm.predictions_down, reference=TD_true.labels_down, positive = "Positive")
+
+
+TD_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+TD_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+TD_tuning.results_down <- tune(svm, TD_trainmatrix_down, as.factor(TD_train.data_down[, 2]), 
+                               kernel="radial", 
+                               ranges=list(cost=TD_cost.weights, gamma=TD_gamma.weights))
+print(TD_tuning.results_down)
+plot(TD_tuning.results_down, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+# get best model and evaluate predictions
+TD_svm.model.best_down = TD_tuning.results_down$best.model
+TD_svm.predictions.best_down <- predict(TD_svm.model.best_down, TD_testmatrix_down)
+TD_tune_down <- confusionMatrix(data=TD_svm.predictions.best_down, reference=TD_true.labels_down, positive="Positive")
+
+
+TD_svm.predictions.best_down <- predict(TD_svm.model.best_down, TD_testmatrix_down, decision.values = T)
+TD_svm.prediction.values_down <- attributes(TD_svm.predictions.best_down)$decision.values
+TD_predictions_down <- prediction(TD_svm.prediction.values_down, TD_true.labels_down)
+roc.curve(TD_true.labels_down, TD_svm.prediction.values_down)
+
+TD_perf_down <- performance(TD_predictions_down, "tpr", "fpr")
+plot(TD_perf_down, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+TD_auc_down <- performance(TD_predictions_down, "auc")
+TD_auc_down <- unlist(slot(TD_auc_down, "y.values"))
+TD_auc_down <- round(TD_auc_down, 4)
+TD_auc_down
+legend(0.6, 0.2, TD_auc_down, title = "AUC", cex = 1)
+
+```
+
+# SMOTE Method
+
+```{r}
+TD_train.data_smote <- SMOTE(sentiment ~ ., data= TD_train.data, k=5, perc.over = 200, perc.under = 150, learner=NULL)
+table(TD_train.data_smote$sentiment)
+TD_test.data_smote <- TD_test.data
+
+set.seed(1)
+TD_train.data_smote <- TD_train.data_smote[sample(nrow(TD_train.data_smote)), ]
+TD_train.data_smote <- TD_train.data_smote[sample(nrow(TD_train.data_smote)), ]
+
+TD_trainmatrix_smote <- create_matrix(TD_train.data_smote[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+TD_testmatrix_smote <- create_matrix(TD_test.data_smote[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = TD_trainmatrix_smote)
+
+
+TD_svm.model_smote <- svm(TD_trainmatrix_smote, as.factor(TD_train.data_smote[, 2]))
+summary(TD_svm.model_smote)
+TD_svm.predictions_smote <- predict(TD_svm.model_smote, TD_testmatrix_smote)
+TD_true.labels_smote <- as.factor(TD_test.data_smote[,2])
+TD_smote <- confusionMatrix(data=TD_svm.predictions_smote, reference=TD_true.labels_smote, positive = "Positive")
+
+TD_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+TD_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+TD_tuning.results_smote <- tune(svm, TD_trainmatrix_smote, as.factor(TD_train.data_smote[, 2]), 
+                                 kernel= "radial", 
+                                ranges=list(cost=TD_cost.weights, gamma=TD_gamma.weights))
+print(TD_tuning.results_smote)
+plot(TD_tuning.results_smote, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+# get best model and evaluate predictions
+TD_svm.model.best_smote = TD_tuning.results_smote$best.model
+TD_svm.predictions.best_smote <- predict(TD_svm.model.best_smote, TD_testmatrix_smote)
+  TD_tune_smote <- confusionMatrix(data=TD_svm.predictions.best_smote, reference=TD_true.labels_smote, positive="Positive")
+
+TD_svm.predictions.best_smote <- predict(TD_svm.model.best_smote, TD_testmatrix_smote, decision.values = T)
+TD_svm.prediction.values_smote <- attributes(TD_svm.predictions.best_smote)$decision.values
+TD_predictions_smote <- prediction(TD_svm.prediction.values_smote, TD_true.labels_smote)
+roc.curve(TD_true.labels_smote, TD_svm.prediction.values_smote)
+
+TD_perf_smote <- performance(TD_predictions_smote, "tpr", "fpr")
+plot(TD_perf_smote, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+TD_auc_smote <- performance(TD_predictions_smote, "auc")
+TD_auc_smote <- unlist(slot(TD_auc_smote, "y.values"))
+TD_auc_smote <- round(TD_auc_smote, 4)
+TD_auc_smote
+legend(0.6, 0.2, TD_auc_smote, title = "AUC", cex = 1)
+
+```
+
+
+# SCOTIA
+
+```{r}
+SCOTIA_sentimentscore <- get_sentiment(SCOTIA_text)
+head(SCOTIA_sentimentscore)
+class(SCOTIA_text)
+SCOTIA_tweet$polarity <- SCOTIA_sentimentscore
+SCOTIA_tweets_F <- SCOTIA_tweet[, c('SCOTIA_tweet', 'polarity')]
+head(SCOTIA_tweets_F)
+SCOTIA_tweets_F <- SCOTIA_tweets_F[SCOTIA_tweets_F$polarity != 0, ]
+SCOTIA_tweets_F$sentiment <- ifelse(SCOTIA_tweets_F$polarity < 0, "Negative", "Positive")
+SCOTIA_tweets_F$sentiment <- as.factor(SCOTIA_tweets_F$sentiment)
+table(SCOTIA_tweets_F$sentiment)
+SCOTIA_tweets_Full <- SCOTIA_tweets_F[ ,c(1,3)]
+head(SCOTIA_tweets_Full)
+SCOTIA_tweets_Full$sentiment <- as.factor(SCOTIA_tweets_Full$sentiment)
+table(SCOTIA_tweets_Full$sentiment)
+
+set.seed(1)
+SCOTIA_tweets_Full <- SCOTIA_tweets_Full[sample(nrow(SCOTIA_tweets_Full)), ]
+SCOTIA_tweets_Full <- SCOTIA_tweets_Full[sample(nrow(SCOTIA_tweets_Full)), ]
+
+SCOTIA_indexes <- createDataPartition(SCOTIA_tweets_Full[,2], p=0.7, list = FALSE)
+
+SCOTIA_train.data <- SCOTIA_tweets_Full[SCOTIA_indexes,]
+SCOTIA_test.data <- SCOTIA_tweets_Full[-SCOTIA_indexes,]
+table(SCOTIA_train.data$sentiment)
+
+```
+
+
+```{r}
+SCOTIA_trainmatrix <- create_matrix(SCOTIA_train.data[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+SCOTIA_testmatrix <- create_matrix(SCOTIA_test.data[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = SCOTIA_trainmatrix)
+ 
+ # trace("create_matrix",edit=T) 
+  
+```
+
+
+```{r}
+SCOTIA_svm.model <- svm(SCOTIA_trainmatrix, SCOTIA_train.data[, 2])
+summary(SCOTIA_svm.model)
+SCOTIA_svm.predictions <- predict(SCOTIA_svm.model, SCOTIA_testmatrix)
+SCOTIA_true.labels <- as.factor(SCOTIA_test.data[,2])
+SCOTIA_original <- confusionMatrix(data=SCOTIA_svm.predictions, reference=SCOTIA_true.labels, positive = "Positive")
+
+set.seed(1492)
+SCOTIA_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+SCOTIA_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+SCOTIA_tuning.results <- tune(svm, SCOTIA_trainmatrix, as.factor(SCOTIA_train.data[,2]),
+                      kernel="radial",
+                      ranges=list(cost=SCOTIA_cost.weights, gamma=SCOTIA_gamma.weights))
+print(SCOTIA_tuning.results)
+plot(SCOTIA_tuning.results, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+SCOTIA_svm.model.best = SCOTIA_tuning.results$best.model
+SCOTIA_svm.predictions.best <- predict(SCOTIA_svm.model.best, SCOTIA_testmatrix)
+  SCOTIA_tune_original <- confusionMatrix(data=SCOTIA_svm.predictions.best, reference=SCOTIA_true.labels, positive="Positive")
+
+SCOTIA_svm.predictions.best <- predict(SCOTIA_svm.model.best, SCOTIA_testmatrix, decision.values = T)
+SCOTIA_svm.prediction.values <- attributes(SCOTIA_svm.predictions.best)$decision.values
+SCOTIA_predictions <- prediction(SCOTIA_svm.prediction.values, SCOTIA_true.labels)
+
+roc.curve(SCOTIA_true.labels, SCOTIA_svm.prediction.values)
+
+SCOTIA_perf <- performance(SCOTIA_predictions, "tpr", "fpr")
+plot(SCOTIA_perf, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+SCOTIA_auc <- performance(SCOTIA_predictions, "auc")
+SCOTIA_auc <- unlist(slot(SCOTIA_auc, "y.values"))
+SCOTIA_auc <- round(SCOTIA_auc, 4)
+SCOTIA_auc
+legend(0.6, 0.2, SCOTIA_auc, title = "AUC", cex = 1)
+
+```
+
+# upSample Method
+
+```{r}
+SCOTIA_train.data_up <- upSample(x = SCOTIA_train.data$SCOTIA_tweet, y = SCOTIA_train.data$sentiment)
+table(SCOTIA_train.data_up$Class)
+SCOTIA_test.data_up <- SCOTIA_test.data
+
+set.seed(1)
+SCOTIA_train.data_up <- SCOTIA_train.data_up[sample(nrow(SCOTIA_train.data_up)), ]
+SCOTIA_train.data_up <- SCOTIA_train.data_up[sample(nrow(SCOTIA_train.data_up)), ]
+SCOTIA_trainmatrix_up <- create_matrix(SCOTIA_train.data_up[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+SCOTIA_testmatrix_up <- create_matrix(SCOTIA_test.data_up[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = SCOTIA_trainmatrix_up)
+
+SCOTIA_svm.model_up <- svm(SCOTIA_trainmatrix_up, as.factor(SCOTIA_train.data_up[, 2]))
+summary(SCOTIA_svm.model_up)
+SCOTIA_svm.predictions_up <- predict(SCOTIA_svm.model_up, SCOTIA_testmatrix_up)
+SCOTIA_true.labels_up <- as.factor(SCOTIA_test.data_up[,2])
+SCOTIA_up <- confusionMatrix(data=SCOTIA_svm.predictions_up, reference=SCOTIA_true.labels_up, positive = "Positive")
+
+SCOTIA_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+SCOTIA_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+SCOTIA_tuning.results_up <- tune(svm, SCOTIA_trainmatrix_up, as.factor(SCOTIA_train.data_up[, 2]),                                                kernel="radial",
+                                 ranges=list(cost=SCOTIA_cost.weights, gamma=SCOTIA_gamma.weights))
+print(SCOTIA_tuning.results_up)
+plot(SCOTIA_tuning.results_up, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+# get best model and evaluate predictions
+SCOTIA_svm.model.best_up = SCOTIA_tuning.results_up$best.model
+SCOTIA_svm.predictions.best_up <- predict(SCOTIA_svm.model.best_up, SCOTIA_testmatrix_up)
+SCOTIA_tune_up <- confusionMatrix(data=SCOTIA_svm.predictions.best_up, reference=SCOTIA_true.labels_up, positive="Positive")
+
+SCOTIA_svm.predictions.best_up <- predict(SCOTIA_svm.model.best_up, SCOTIA_testmatrix_up, decision.values = T)
+SCOTIA_svm.prediction.values_up <- attributes(SCOTIA_svm.predictions.best_up)$decision.values
+SCOTIA_predictions_up <- prediction(SCOTIA_svm.prediction.values_up, SCOTIA_true.labels_up)
+
+roc.curve(SCOTIA_true.labels_up, SCOTIA_svm.prediction.values_up)
+
+SCOTIA_perf_up <- performance(SCOTIA_predictions_up, "tpr", "fpr")
+plot(SCOTIA_perf_up, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+SCOTIA_auc_up <- performance(SCOTIA_predictions_up, "auc")
+SCOTIA_auc_up <- unlist(slot(SCOTIA_auc_up, "y.values"))
+SCOTIA_auc_up <- round(SCOTIA_auc_up, 4)
+SCOTIA_auc_up
+legend(0.6, 0.2, SCOTIA_auc_up, title = "AUC", cex = 1)
+
+```
+
+# downSample Method
+
+```{r}
+SCOTIA_train.data_down <- downSample(x = SCOTIA_train.data$SCOTIA_tweet, y = SCOTIA_train.data$sentiment)
+table(SCOTIA_train.data_down$Class)
+SCOTIA_test.data_down <- SCOTIA_test.data
+
+set.seed(1)
+SCOTIA_train.data_down <- SCOTIA_train.data_down[sample(nrow(SCOTIA_train.data_down)), ]
+SCOTIA_train.data_down <- SCOTIA_train.data_down[sample(nrow(SCOTIA_train.data_down)), ]
+
+SCOTIA_trainmatrix_down <- create_matrix(SCOTIA_train.data_down[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+SCOTIA_testmatrix_down <- create_matrix(SCOTIA_test.data_down[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = SCOTIA_trainmatrix_down)
+
+SCOTIA_svm.model_down <- svm(SCOTIA_trainmatrix_down, as.factor(SCOTIA_train.data_down[, 2]))
+summary(SCOTIA_svm.model_down)
+SCOTIA_svm.predictions_down <- predict(SCOTIA_svm.model_down, SCOTIA_testmatrix_down)
+SCOTIA_true.labels_down <- as.factor(SCOTIA_test.data_down[,2])
+SCOTIA_down <- confusionMatrix(data=SCOTIA_svm.predictions_down, reference=SCOTIA_true.labels_down, positive = "Positive")
+
+SCOTIA_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+SCOTIA_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+SCOTIA_tuning.results_down <- tune(svm, SCOTIA_trainmatrix_down, as.factor(SCOTIA_train.data_down[, 2]),
+                                   kernel="radial", 
+                                   ranges=list(cost=SCOTIA_cost.weights, gamma=SCOTIA_gamma.weights))
+print(SCOTIA_tuning.results_down)
+plot(SCOTIA_tuning.results_down, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+# get best model and evaluate predictions
+SCOTIA_svm.model.best_down = SCOTIA_tuning.results_down$best.model
+SCOTIA_svm.predictions.best_down <- predict(SCOTIA_svm.model.best_down, SCOTIA_testmatrix_down)
+SCOTIA_tune_down <- confusionMatrix(data=SCOTIA_svm.predictions.best_down, reference=SCOTIA_true.labels_down, positive="Positive")
+
+SCOTIA_svm.predictions.best_down <- predict(SCOTIA_svm.model.best_down, SCOTIA_testmatrix_down, decision.values = T)
+SCOTIA_svm.prediction.values_down <- attributes(SCOTIA_svm.predictions.best_down)$decision.values
+SCOTIA_predictions_down <- prediction(SCOTIA_svm.prediction.values_down, SCOTIA_true.labels_down)
+
+roc.curve(SCOTIA_true.labels_down, SCOTIA_svm.prediction.values_down)
+
+SCOTIA_perf_down <- performance(SCOTIA_predictions_down, "tpr", "fpr")
+plot(SCOTIA_perf_down, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+SCOTIA_auc_down <- performance(SCOTIA_predictions_down, "auc")
+SCOTIA_auc_down <- unlist(slot(SCOTIA_auc_down, "y.values"))
+SCOTIA_auc_down <- round(SCOTIA_auc_down, 4)
+SCOTIA_auc_down
+legend(0.6, 0.2, SCOTIA_auc_down, title = "AUC", cex = 1)
+
+```
+
+# SMOTE Method
+
+```{r}
+SCOTIA_train.data_smote <- SMOTE(sentiment ~ ., data=SCOTIA_train.data, k=5, perc.over = 200, perc.under = 150, learner=NULL)
+table(SCOTIA_train.data_smote$sentiment)
+SCOTIA_test.data_smote <- SCOTIA_test.data
+set.seed(1)
+SCOTIA_train.data_smote <- SCOTIA_train.data_smote[sample(nrow(SCOTIA_train.data_smote)), ]
+SCOTIA_train.data_smote <- SCOTIA_train.data_smote[sample(nrow(SCOTIA_train.data_smote)), ]
+
+SCOTIA_trainmatrix_smote <- create_matrix(SCOTIA_train.data_smote[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+SCOTIA_testmatrix_smote <- create_matrix(SCOTIA_test.data_smote[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = SCOTIA_trainmatrix_smote)
+
+SCOTIA_svm.model_smote <- svm(SCOTIA_trainmatrix_smote, as.factor(SCOTIA_train.data_smote[, 2]))
+summary(SCOTIA_svm.model_smote)
+SCOTIA_svm.predictions_smote <- predict(SCOTIA_svm.model_smote, SCOTIA_testmatrix_smote)
+SCOTIA_true.labels_smote <- as.factor(SCOTIA_test.data_smote[,2])
+SCOTIA_smote <- confusionMatrix(data=SCOTIA_svm.predictions_smote, reference=SCOTIA_true.labels_smote, positive = "Positive")
+
+SCOTIA_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+SCOTIA_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+SCOTIA_tuning.results_smote <- tune(svm, SCOTIA_trainmatrix_smote, as.factor(SCOTIA_train.data_smote[, 2]),
+                                    kernel="radial", 
+                                    ranges=list(cost=SCOTIA_cost.weights, gamma=SCOTIA_gamma.weights))
+print(SCOTIA_tuning.results_smote)
+plot(SCOTIA_tuning.results_smote, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+# get best model and evaluate predictions
+SCOTIA_svm.model.best_smote = SCOTIA_tuning.results_smote$best.model
+SCOTIA_svm.predictions.best_smote <- predict(SCOTIA_svm.model.best_smote, SCOTIA_testmatrix_smote)
+SCOTIA_tune_smote <- confusionMatrix(data=SCOTIA_svm.predictions.best_smote, reference=SCOTIA_true.labels_smote, positive="Positive")
+
+SCOTIA_svm.predictions.best_smote <- predict(SCOTIA_svm.model.best_smote, SCOTIA_testmatrix_smote, decision.values = T)
+SCOTIA_svm.prediction.values_smote <- attributes(SCOTIA_svm.predictions.best_smote)$decision.values
+SCOTIA_predictions_smote <- prediction(SCOTIA_svm.prediction.values_smote, SCOTIA_true.labels_smote)
+
+roc.curve(SCOTIA_true.labels_smote, SCOTIA_svm.prediction.values_smote)
+
+SCOTIA_perf_smote <- performance(SCOTIA_predictions_smote, "tpr", "fpr")
+plot(SCOTIA_perf_smote, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+SCOTIA_auc_smote <- performance(SCOTIA_predictions_smote, "auc")
+SCOTIA_auc_smote <- unlist(slot(SCOTIA_auc_smote, "y.values"))
+SCOTIA_auc_smote <- round(SCOTIA_auc_smote, 4)
+SCOTIA_auc_smote
+legend(0.6, 0.2, SCOTIA_auc_smote, title = "AUC", cex = 1)
+
+```
+
+# BMO
+
+```{r}
+BMO_sentimentscore <- get_sentiment(BMO_text)
+head(BMO_sentimentscore)
+class(BMO_text)
+BMO_tweet$polarity <- BMO_sentimentscore
+BMO_tweets_F <- BMO_tweet[, c('BMO_tweet', 'polarity')]
+head(BMO_tweets_F)
+BMO_tweets_F <- BMO_tweets_F[BMO_tweets_F$polarity != 0, ]
+BMO_tweets_F$sentiment <- ifelse(BMO_tweets_F$polarity < 0, "Negative", "Positive")
+BMO_tweets_F$sentiment <- as.factor(BMO_tweets_F$sentiment)
+table(BMO_tweets_F$sentiment)
+BMO_tweets_Full <- BMO_tweets_F[ ,c(1,3)]
+head(BMO_tweets_Full)
+BMO_tweets_Full$sentiment <- as.factor(BMO_tweets_Full$sentiment)
+table(BMO_tweets_Full$sentiment)
+
+set.seed(1)
+BMO_tweets_Full <- BMO_tweets_Full[sample(nrow(BMO_tweets_Full)), ]
+BMO_tweets_Full <- BMO_tweets_Full[sample(nrow(BMO_tweets_Full)), ]
+
+
+BMO_indexes <- createDataPartition(BMO_tweets_Full[,2], p=0.7, list = FALSE)
+
+BMO_train.data <- BMO_tweets_Full[BMO_indexes,]
+BMO_test.data <- BMO_tweets_Full[-BMO_indexes,]
+table(BMO_train.data$sentiment)
+
+```
+
+
+```{r}
+BMO_trainmatrix <- create_matrix(BMO_train.data[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+BMO_testmatrix <- create_matrix(BMO_test.data[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = BMO_trainmatrix)
+ 
+ # trace("create_matrix",edit=T) 
+  
+```
+
+```{r}
+BMO_svm.model <- svm(BMO_trainmatrix, BMO_train.data[, 2])
+summary(BMO_svm.model)
+BMO_svm.predictions <- predict(BMO_svm.model, BMO_testmatrix)
+BMO_true.labels <- as.factor(BMO_test.data[,2])
+BMO_original <- confusionMatrix(data=BMO_svm.predictions, reference=BMO_true.labels, positive = "Positive")
+
+set.seed(1492)
+BMO_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+BMO_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+BMO_tuning.results <- tune(svm, BMO_trainmatrix, as.factor(BMO_train.data[, 2]),
+                      kernel="radial",
+                      ranges=list(cost=BMO_cost.weights, gamma=BMO_gamma.weights))
+print(BMO_tuning.results)
+plot(BMO_tuning.results, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+BMO_svm.model.best = BMO_tuning.results$best.model
+BMO_svm.predictions.best <- predict(BMO_svm.model.best, BMO_testmatrix)
+BMO_tune_original <- confusionMatrix(data=BMO_svm.predictions.best, reference=BMO_true.labels, positive="Positive")
+
+BMO_svm.predictions.best <- predict(BMO_svm.model.best, BMO_testmatrix, decision.values = T)
+BMO_svm.prediction.values <- attributes(BMO_svm.predictions.best)$decision.values
+BMO_predictions <- prediction(BMO_svm.prediction.values, BMO_true.labels)
+
+roc.curve(BMO_true.labels, BMO_svm.prediction.values)
+
+BMO_perf <- performance(BMO_predictions, "tpr", "fpr")
+plot(BMO_perf, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+BMO_auc <- performance(BMO_predictions, "auc")
+BMO_auc <- unlist(slot(BMO_auc, "y.values"))
+BMO_auc <- round(BMO_auc, 4)
+BMO_auc
+legend(0.6, 0.2, BMO_auc, title = "AUC", cex = 1)
+
+```
+
+# upSample Method
+
+```{r}
+BMO_train.data_up <- upSample(x = BMO_train.data$BMO_tweet, y = BMO_train.data$sentiment)
+table(BMO_train.data_up$Class)
+BMO_test.data_up <- BMO_test.data
+
+set.seed(1)
+BMO_train.data_up <- BMO_train.data_up[sample(nrow(BMO_train.data_up)), ]
+BMO_train.data_up <- BMO_train.data_up[sample(nrow(BMO_train.data_up)), ]
+
+BMO_trainmatrix_up <- create_matrix(BMO_train.data_up[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+BMO_testmatrix_up <- create_matrix(BMO_test.data_up[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = BMO_trainmatrix_up)
+
+BMO_svm.model_up <- svm(BMO_trainmatrix_up, as.factor(BMO_train.data_up[, 2]))
+summary(BMO_svm.model_up)
+BMO_svm.predictions_up <- predict(BMO_svm.model_up, BMO_testmatrix_up)
+BMO_true.labels_up <- as.factor(BMO_test.data_up[,2])
+BMO_up <- confusionMatrix(data=BMO_svm.predictions_up, reference=BMO_true.labels_up, positive = "Positive")
+
+BMO_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+BMO_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+BMO_tuning.results_up <- tune(svm, BMO_trainmatrix_up, as.factor(BMO_train.data_up[, 2]), 
+                              kernel="radial", 
+                              ranges=list(cost=BMO_cost.weights, gamma=BMO_gamma.weights))
+print(BMO_tuning.results_up)
+plot(BMO_tuning.results_up, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+
+# get best model and evaluate predictions
+BMO_svm.model.best_up = BMO_tuning.results_up$best.model
+BMO_svm.predictions.best_up <- predict(BMO_svm.model.best_up, BMO_testmatrix_up)
+BMO_tune_up <- confusionMatrix(data=BMO_svm.predictions.best_up, reference=BMO_true.labels_up, positive="Positive")
+
+BMO_svm.predictions.best_up <- predict(BMO_svm.model.best_up, BMO_testmatrix_up, decision.values = T)
+BMO_svm.prediction.values_up <- attributes(BMO_svm.predictions.best_up)$decision.values
+BMO_predictions_up <- prediction(BMO_svm.prediction.values_up, BMO_true.labels_up)
+
+roc.curve(BMO_true.labels_up, BMO_svm.prediction.values_up)
+
+BMO_perf_up <- performance(BMO_predictions_up, "tpr", "fpr")
+plot(BMO_perf_up, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+BMO_auc_up <- performance(BMO_predictions_up, "auc")
+BMO_auc_up <- unlist(slot(BMO_auc_up, "y.values"))
+BMO_auc_up <- round(BMO_auc_up, 4)
+BMO_auc_up
+legend(0.6, 0.2, BMO_auc_up, title = "AUC", cex = 1)
+
+```
+
+
+# downSample Method
+
+```{r}
+BMO_train.data_down <- downSample(x = BMO_train.data$BMO_tweet, y = BMO_train.data$sentiment)
+table(BMO_train.data_down$Class)
+BMO_test.data_down <- BMO_test.data
+
+set.seed(1)
+BMO_train.data_down <- BMO_train.data_down[sample(nrow(BMO_train.data_down)), ]
+BMO_train.data_down <- BMO_train.data_down[sample(nrow(BMO_train.data_down)), ]
+
+BMO_trainmatrix_down <- create_matrix(BMO_train.data_down[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+BMO_testmatrix_down <- create_matrix(BMO_test.data_down[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = BMO_trainmatrix_down)
+
+BMO_svm.model_down <- svm(BMO_trainmatrix_down, as.factor(BMO_train.data_down[, 2]))
+summary(BMO_svm.model_down)
+BMO_svm.predictions_down <- predict(BMO_svm.model_down, BMO_testmatrix_down)
+BMO_true.labels_down <- as.factor(BMO_test.data_down[,2])
+BMO_down <- confusionMatrix(data=BMO_svm.predictions_down, reference=BMO_true.labels_down, positive = "Positive")
+
+BMO_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+BMO_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+BMO_tuning.results_down <- tune(svm, BMO_trainmatrix_down, as.factor(BMO_train.data_down[, 2]), 
+                                kernel="radial", 
+                                ranges=list(cost=BMO_cost.weights, gamma=BMO_gamma.weights))
+print(BMO_tuning.results_down)
+plot(BMO_tuning.results_down, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+# get best model and evaluate predictions
+BMO_svm.model.best_down = BMO_tuning.results_down$best.model
+BMO_svm.predictions.best_down <- predict(BMO_svm.model.best_down, BMO_testmatrix_down)
+BMO_tune_down <- confusionMatrix(data=BMO_svm.predictions.best_down, reference=BMO_true.labels_down, positive="Positive")
+
+BMO_svm.predictions.best_down <- predict(BMO_svm.model.best_down, BMO_testmatrix_down, decision.values = T)
+BMO_svm.prediction.values_down <- attributes(BMO_svm.predictions.best_down)$decision.values
+BMO_predictions_down <- prediction(BMO_svm.prediction.values_down, BMO_true.labels_down)
+
+roc.curve(BMO_true.labels_down, BMO_svm.prediction.values_down)
+
+BMO_perf_down <- performance(BMO_predictions_down, "tpr", "fpr")
+plot(BMO_perf_down, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+BMO_auc_down <- performance(BMO_predictions_down, "auc")
+BMO_auc_down <- unlist(slot(BMO_auc_down, "y.values"))
+BMO_auc_down <- round(BMO_auc_down, 4)
+BMO_auc_down
+legend(0.6, 0.2, BMO_auc_down, title = "AUC", cex = 1)
+
+```
+# SMOTE Method
+
+```{r}
+BMO_train.data_smote <- SMOTE(sentiment ~ ., data= BMO_train.data, k=5, perc.over = 200, perc.under = 150, learner=NULL)
+table(BMO_train.data_smote$sentiment)
+BMO_test.data_smote <- BMO_test.data
+
+set.seed(1)
+BMO_train.data_smote <- BMO_train.data_smote[sample(nrow(BMO_train.data_smote)), ]
+BMO_train.data_smote <- BMO_train.data_smote[sample(nrow(BMO_train.data_smote)), ]
+
+BMO_trainmatrix_smote <- create_matrix(BMO_train.data_smote[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+BMO_testmatrix_smote <- create_matrix(BMO_test.data_smote[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = BMO_trainmatrix_smote)
+
+BMO_svm.model_smote <- svm(BMO_trainmatrix_smote, as.factor(BMO_train.data_smote[, 2]))
+summary(BMO_svm.model_smote)
+BMO_svm.predictions_smote <- predict(BMO_svm.model_smote, BMO_testmatrix_smote)
+BMO_true.labels_smote <- as.factor(BMO_test.data_smote[,2])
+BMO_smote <- confusionMatrix(data=BMO_svm.predictions_smote, reference=BMO_true.labels_smote, positive = "Positive")
+
+BMO_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+BMO_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+BMO_tuning.results_smote <- tune(svm, BMO_trainmatrix_smote, as.factor(BMO_train.data_smote[, 2]), 
+                                  kernel="radial", 
+                                  ranges=list(cost=BMO_cost.weights, gamma=BMO_gamma.weights))
+print(BMO_tuning.results_smote)
+plot(BMO_tuning.results_smote, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+# get best model and evaluate predictions
+BMO_svm.model.best_smote = BMO_tuning.results_smote$best.model
+BMO_svm.predictions.best_smote <- predict(BMO_svm.model.best_smote, BMO_testmatrix_smote)
+BMO_tune_smote <- confusionMatrix(data=BMO_svm.predictions.best_smote, reference=BMO_true.labels_smote, positive="Positive")
+
+BMO_svm.predictions.best_smote <- predict(BMO_svm.model.best_smote, BMO_testmatrix_smote, decision.values = T)
+BMO_svm.prediction.values_smote <- attributes(BMO_svm.predictions.best_smote)$decision.values
+BMO_predictions_smote <- prediction(BMO_svm.prediction.values_smote, BMO_true.labels_smote)
+
+roc.curve(BMO_true.labels_smote, BMO_svm.prediction.values_smote)
+
+BMO_perf_smote <- performance(BMO_predictions_smote, "tpr", "fpr")
+plot(BMO_perf_smote, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+BMO_auc_smote <- performance(BMO_predictions_smote, "auc")
+BMO_auc_smote <- unlist(slot(BMO_auc_smote, "y.values"))
+BMO_auc_smote <- round(BMO_auc_smote, 4)
+BMO_auc_smote
+legend(0.6, 0.2, BMO_auc_smote, title = "AUC", cex = 1)
+
+```
+
+
+# CIBC
+
+```{r}
+CIBC_sentimentscore <- get_sentiment(CIBC_text)
+head(CIBC_sentimentscore)
+class(CIBC_text)
+CIBC_tweet$polarity <- CIBC_sentimentscore
+CIBC_tweets_F <- CIBC_tweet[, c('CIBC_tweet', 'polarity')]
+head(CIBC_tweets_F)
+CIBC_tweets_F <- CIBC_tweets_F[CIBC_tweets_F$polarity != 0, ]
+CIBC_tweets_F$sentiment <- ifelse(CIBC_tweets_F$polarity < 0, "Negative", "Positive")
+CIBC_tweets_F$sentiment <- as.factor(CIBC_tweets_F$sentiment)
+table(CIBC_tweets_F$sentiment)
+CIBC_tweets_Full <- CIBC_tweets_F[ ,c(1,3)]
+head(CIBC_tweets_Full)
+CIBC_tweets_Full$sentiment <- as.factor(CIBC_tweets_Full$sentiment)
+table(CIBC_tweets_Full$sentiment)
+
+set.seed(1)
+CIBC_tweets_Full <- CIBC_tweets_Full[sample(nrow(CIBC_tweets_Full)), ]
+CIBC_tweets_Full <- CIBC_tweets_Full[sample(nrow(CIBC_tweets_Full)), ]
+
+
+CIBC_indexes <- createDataPartition(CIBC_tweets_Full[,2], p=0.7, list = FALSE)
+
+CIBC_train.data <- CIBC_tweets_Full[CIBC_indexes,]
+CIBC_test.data <- CIBC_tweets_Full[-CIBC_indexes,]
+table(CIBC_train.data$sentiment)
+
+```
+
+
+```{r}
+CIBC_trainmatrix <- create_matrix(CIBC_train.data[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+CIBC_testmatrix <- create_matrix(CIBC_test.data[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = CIBC_trainmatrix)
+ 
+ # trace("create_matrix",edit=T) 
+  
+```
+
+
+```{r}
+CIBC_svm.model <- svm(CIBC_trainmatrix, CIBC_train.data[, 2])
+summary(CIBC_svm.model)
+CIBC_svm.predictions <- predict(CIBC_svm.model, CIBC_testmatrix)
+CIBC_true.labels <- as.factor(CIBC_test.data[,2])
+CIBC_original <- confusionMatrix(data=CIBC_svm.predictions, reference=CIBC_true.labels, positive = "Positive")
+
+set.seed(1492)
+CIBC_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+CIBC_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+CIBC_tuning.results <- tune(svm, CIBC_trainmatrix, as.factor(CIBC_train.data[,2]),
+                      kernel="radial",
+                      ranges=list(cost=CIBC_cost.weights, gamma=CIBC_gamma.weights))
+print(CIBC_tuning.results)
+plot(CIBC_tuning.results, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+CIBC_svm.model.best = CIBC_tuning.results$best.model
+CIBC_svm.predictions.best <- predict(CIBC_svm.model.best, CIBC_testmatrix)
+CIBC_tune_original <- confusionMatrix(data=CIBC_svm.predictions.best, reference=CIBC_true.labels, positive="Positive")
+
+
+CIBC_svm.predictions.best <- predict(CIBC_svm.model.best, CIBC_testmatrix, decision.values = T)
+CIBC_svm.prediction.values <- attributes(CIBC_svm.predictions.best)$decision.values
+CIBC_predictions <- prediction(CIBC_svm.prediction.values, CIBC_true.labels)
+
+roc.curve(CIBC_true.labels, CIBC_svm.prediction.values)
+
+CIBC_perf <- performance(CIBC_predictions, "tpr", "fpr")
+plot(CIBC_perf, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+CIBC_auc <- performance(CIBC_predictions, "auc")
+CIBC_auc <- unlist(slot(CIBC_auc, "y.values"))
+CIBC_auc <- round(CIBC_auc, 4)
+CIBC_auc
+legend(0.6, 0.2, CIBC_auc, title = "AUC", cex = 1)
+
+```
+
+# upSample Method
+
+```{r}
+CIBC_train.data_up <- upSample(x = CIBC_train.data$CIBC_tweet, y = CIBC_train.data$sentiment)
+table(CIBC_train.data_up$Class)
+CIBC_test.data_up <- CIBC_test.data
+
+set.seed(1)
+CIBC_train.data_up <- CIBC_train.data_up[sample(nrow(CIBC_train.data_up)), ]
+CIBC_train.data_up <- CIBC_train.data_up[sample(nrow(CIBC_train.data_up)), ]
+
+CIBC_trainmatrix_up <- create_matrix(CIBC_train.data_up[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+CIBC_testmatrix_up <- create_matrix(CIBC_test.data_up[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = CIBC_trainmatrix_up)
+
+
+CIBC_svm.model_up <- svm(CIBC_trainmatrix_up, as.factor(CIBC_train.data_up[, 2]))
+summary(CIBC_svm.model_up)
+CIBC_svm.predictions_up <- predict(CIBC_svm.model_up, CIBC_testmatrix_up)
+CIBC_true.labels_up <- as.factor(CIBC_test.data_up[,2])
+CIBC_up <- confusionMatrix(data=CIBC_svm.predictions_up, reference=CIBC_true.labels_up, positive = "Positive")
+
+CIBC_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+CIBC_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+CIBC_tuning.results_up <- tune(svm, CIBC_trainmatrix_up, as.factor(CIBC_train.data_up[,2]), kernel="radial", ranges=list(cost=CIBC_cost.weights, gamma=CIBC_gamma.weights))
+print(CIBC_tuning.results_up)
+plot(CIBC_tuning.results_up, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+# get best model and evaluate predictions
+CIBC_svm.model.best_up = CIBC_tuning.results_up$best.model
+CIBC_svm.predictions.best_up <- predict(CIBC_svm.model.best_up, CIBC_testmatrix_up)
+CIBC_tune_up <- confusionMatrix(data=CIBC_svm.predictions.best_up, reference=CIBC_true.labels_up, positive="Positive")
+
+CIBC_svm.predictions.best_up <- predict(CIBC_svm.model.best_up, CIBC_testmatrix_up, decision.values = T)
+CIBC_svm.prediction.values_up <- attributes(CIBC_svm.predictions.best_up)$decision.values
+CIBC_predictions_up <- prediction(CIBC_svm.prediction.values_up, CIBC_true.labels_up)
+
+roc.curve(CIBC_true.labels_up, CIBC_svm.prediction.values_up)
+
+CIBC_perf_up <- performance(CIBC_predictions_up, "tpr", "fpr")
+plot(CIBC_perf_up, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+CIBC_auc_up <- performance(CIBC_predictions_up, "auc")
+CIBC_auc_up <- unlist(slot(CIBC_auc_up, "y.values"))
+CIBC_auc_up <- round(CIBC_auc_up, 4)
+CIBC_auc_up
+legend(0.6, 0.2, CIBC_auc_up, title = "AUC", cex = 1)
+
+```
+
+# downSample Method
+
+```{r}
+CIBC_train.data_down <- downSample(x = CIBC_train.data$CIBC_tweet, y = CIBC_train.data$sentiment)
+table(CIBC_train.data_down$Class)
+CIBC_test.data_down <- CIBC_test.data
+
+set.seed(1)
+CIBC_train.data_down <- CIBC_train.data_down[sample(nrow(CIBC_train.data_down)), ]
+CIBC_train.data_down <- CIBC_train.data_down[sample(nrow(CIBC_train.data_down)), ]
+
+CIBC_trainmatrix_down <- create_matrix(CIBC_train.data_down[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+CIBC_testmatrix_down <- create_matrix(CIBC_test.data_down[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = CIBC_trainmatrix_down)
+
+CIBC_svm.model_down <- svm(CIBC_trainmatrix_down, as.factor(CIBC_train.data_down[, 2]))
+summary(CIBC_svm.model_down)
+CIBC_svm.predictions_down <- predict(CIBC_svm.model_down, CIBC_testmatrix_down)
+CIBC_true.labels_down <- as.factor(CIBC_test.data_down[,2])
+CIBC_down <- confusionMatrix(data=CIBC_svm.predictions_down, reference=CIBC_true.labels_down, positive = "Positive")
+
+CIBC_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+CIBC_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+CIBC_tuning.results_down <- tune(svm, CIBC_trainmatrix_down, as.factor(CIBC_train.data_down[,2]), kernel="radial", ranges=list(cost=CIBC_cost.weights, gamma=CIBC_gamma.weights))
+print(CIBC_tuning.results_down)
+plot(CIBC_tuning.results_down, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+# get best model and evaluate predictions
+CIBC_svm.model.best_down = CIBC_tuning.results_down$best.model
+CIBC_svm.predictions.best_down <- predict(CIBC_svm.model.best_down, CIBC_testmatrix_down)
+CIBC_tune_down <- confusionMatrix(data=CIBC_svm.predictions.best_down, reference=CIBC_true.labels_down, positive="Positive")
+
+CIBC_svm.predictions.best_down <- predict(CIBC_svm.model.best_down, CIBC_testmatrix_down, decision.values = T)
+CIBC_svm.prediction.values_down <- attributes(CIBC_svm.predictions.best_down)$decision.values
+CIBC_predictions_down <- prediction(CIBC_svm.prediction.values_down, CIBC_true.labels_down)
+
+roc.curve(CIBC_true.labels_down, CIBC_svm.prediction.values_down)
+
+CIBC_perf_down <- performance(CIBC_predictions_down, "tpr", "fpr")
+plot(CIBC_perf_down, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+CIBC_auc_down <- performance(CIBC_predictions_down, "auc")
+CIBC_auc_down <- unlist(slot(CIBC_auc_down, "y.values"))
+CIBC_auc_down <- round(CIBC_auc_down, 4)
+CIBC_auc_down
+legend(0.6, 0.2, CIBC_auc_down, title = "AUC", cex = 1)
+
+```
+
+# SMOTE Method
+
+```{r}
+CIBC_train.data_smote <- SMOTE(sentiment ~ ., data= CIBC_train.data, k=5, perc.over = 200, perc.under = 150, learner=NULL)
+table(CIBC_train.data_smote$sentiment)
+CIBC_test.data_smote <- CIBC_test.data
+
+set.seed(1)
+CIBC_train.data_smote <- CIBC_train.data_smote[sample(nrow(CIBC_train.data_smote)), ]
+CIBC_train.data_smote <- CIBC_train.data_smote[sample(nrow(CIBC_train.data_smote)), ]
+
+CIBC_trainmatrix_smote <- create_matrix(CIBC_train.data_smote[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 removeSparseTerms = 0.99,
+                                 weighting = tm::weightTfIdf)
+CIBC_testmatrix_smote <- create_matrix(CIBC_test.data_smote[, 1], 
+                                 language = "english",
+                                 removeStopwords = TRUE,
+                                 removeNumbers = TRUE,
+                                 stemWords = TRUE,
+                                 weighting = tm::weightTfIdf,
+                                removeSparseTerms = 0.99,
+                                originalMatrix = CIBC_trainmatrix_smote)
+
+CIBC_svm.model_smote <- svm(CIBC_trainmatrix_smote, as.factor(CIBC_train.data_smote[, 2]))
+summary(CIBC_svm.model_smote)
+CIBC_svm.predictions_smote <- predict(CIBC_svm.model_smote, CIBC_testmatrix_smote)
+CIBC_true.labels_smote <- as.factor(CIBC_test.data_smote[,2])
+CIBC_smote <- confusionMatrix(data=CIBC_svm.predictions_smote, reference=CIBC_true.labels_smote, positive = "Positive")
+
+CIBC_cost.weights <- c(0.01, 0.1, 1, 10, 100)
+CIBC_gamma.weights <- c(0.01, 0.05, 0.1, 0.5, 1)
+CIBC_tuning.results_smote <- tune(svm, CIBC_trainmatrix_smote, as.factor(CIBC_train.data_smote[,2]), kernel="radial", ranges=list(cost=CIBC_cost.weights, gamma=CIBC_gamma.weights))
+print(CIBC_tuning.results_smote)
+plot(CIBC_tuning.results_smote, cex.main=0.6, cex.lab=0.8,xaxs="i", yaxs="i")
+
+# get best model and evaluate predictions
+CIBC_svm.model.best_smote = CIBC_tuning.results_smote$best.model
+CIBC_svm.predictions.best_smote <- predict(CIBC_svm.model.best_smote, CIBC_testmatrix_smote)
+CIBC_tune_smote <- confusionMatrix(data=CIBC_svm.predictions.best_smote, reference=CIBC_true.labels_smote, positive="Positive")
+
+CIBC_svm.predictions.best_smote <- predict(CIBC_svm.model.best_smote, CIBC_testmatrix_smote, decision.values = T)
+CIBC_svm.prediction.values_smote <- attributes(CIBC_svm.predictions.best_smote)$decision.values
+CIBC_predictions_smote <- prediction(CIBC_svm.prediction.values_smote, CIBC_true.labels_smote)
+
+roc.curve(CIBC_true.labels_smote, CIBC_svm.prediction.values_smote)
+
+
+CIBC_perf_smote <- performance(CIBC_predictions_smote, "tpr", "fpr")
+plot(CIBC_perf_smote, colorize = TRUE, print.cutoffs.at = seq(0.1, by = 0.1))
+abline(a=0, b=1)
+CIBC_auc_smote <- performance(CIBC_predictions_smote, "auc")
+CIBC_auc_smote <- unlist(slot(CIBC_auc_smote, "y.values"))
+CIBC_auc_smote <- round(CIBC_auc_smote, 4)
+CIBC_auc_smote
+legend(0.6, 0.2, CIBC_auc_smote, title = "AUC", cex = 1)
+
+```
+
