@@ -28,8 +28,12 @@ Get tweets from Twitter
 
 To have access to the Twitter API, we'll need to login the Twitter Developer website and create an application. After registering, grab your application’s Consumer Key, Consumer Secret, Access token and Access token secret from Keys and Access Tokens tab.
 We use the setup_twitter_oauth function to set up our authentication. Authorizing with keys into Twitter is done as follows:
+
 library(twitteR)
 setup_twitter_oauth(consumer.key, consumer.secret, access.token, token.secret)
+
 The searchTwitter allows you to download tweets. For this, I use the following command,
+
 tweets_RBC <- searchTwitter("RBC+rbc -filter:retweets", since = '2000-01-01', lang ='en', n = 5000)
+
 I did the same for each of the banks like RBC, TD, CIBC, BMO and SCOTIA. After that we need to convert into data frame and finally save this into csv file.
