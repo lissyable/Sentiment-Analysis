@@ -30,6 +30,7 @@ To have access to the Twitter API, we'll need to login the Twitter Developer web
 We use the setup_twitter_oauth function to set up our authentication. Authorizing with keys into Twitter is done as follows:
 
 library(twitteR)
+
 setup_twitter_oauth(consumer.key, consumer.secret, access.token, token.secret)
 
 The searchTwitter allows you to download tweets. For this, I use the following command,
