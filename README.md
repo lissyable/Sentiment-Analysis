@@ -21,3 +21,15 @@ What do people think about our product (service, company etc.)?
 How positive (or negative) are people about our product?  
 What would people prefer our product to be like?
 
+Dataset
+
+The dataset I am using is the data extracted from Twitter using R. The dataset has 16 variables namely text, favorited, favorite Count, created, is retweet, retweeted, longitude, latitude, …For the sentiment analysis I am using only the column text.  
+Get tweets from Twitter
+
+To have access to the Twitter API, we'll need to login the Twitter Developer website and create an application. After registering, grab your application’s Consumer Key, Consumer Secret, Access token and Access token secret from Keys and Access Tokens tab.
+We use the setup_twitter_oauth function to set up our authentication. Authorizing with keys into Twitter is done as follows:
+library(twitteR)
+setup_twitter_oauth(consumer.key, consumer.secret, access.token, token.secret)
+The searchTwitter allows you to download tweets. For this, I use the following command,
+tweets_RBC <- searchTwitter("RBC+rbc -filter:retweets", since = '2000-01-01', lang ='en', n = 5000)
+I did the same for each of the banks like RBC, TD, CIBC, BMO and SCOTIA. After that we need to convert into data frame and finally save this into csv file.
